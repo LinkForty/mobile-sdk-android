@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `llms.txt` — LLM-optimized integration reference for AI coding assistants
+
 ## [1.0.0] - 2026-02-16
 
 ### Added

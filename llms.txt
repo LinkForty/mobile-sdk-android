@@ -1,0 +1,488 @@
+# com.linkforty:sdk (Android)
+
+> Native Kotlin SDK for LinkForty — an open-source mobile attribution and deep link management platform. Handles App Links, deferred deep linking (install attribution), in-app event tracking with offline queue, revenue tracking, and link creation. Zero external dependencies beyond Kotlin stdlib. Works with LinkForty Cloud (linkforty.com) or self-hosted Core instances.
+
+## Requirements
+
+- Android API 26+ (Android 8.0 Oreo)
+- Kotlin 1.9+
+- JDK 17
+
+## Installation
+
+### build.gradle.kts (app level)
+
+```kotlin
+dependencies {
+    implementation("com.linkforty:sdk:1.0.0")
+}
+```
+
+### settings.gradle.kts (if using GitHub Packages)
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://maven.pkg.github.com/linkforty/mobile-sdk-android")
+            credentials {
+                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_USER")
+                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
+```
+
+### build.gradle (Groovy)
+
+```groovy
+dependencies {
+    implementation 'com.linkforty:sdk:1.0.0'
+}
+```
+
+## Kotlin Types
+
+```kotlin
+data class LinkFortyConfig(
+    val baseURL: String,
+    val apiKey: String? = null,        // only needed for createLink()
+    val debug: Boolean = false,
+    val attributionWindowHours: Int = 168  // 7 days, range: 1-2160
+)
+
+data class DeepLinkData(
+    val shortCode: String,
+    val iosURL: String? = null,
+    val androidURL: String? = null,
+    val webURL: String? = null,
+    val utmParameters: UTMParameters? = null,
+    /** Custom key-value parameters set when the link was created */
+    val customParameters: Map<String, String>? = null,
+    /** In-app destination path (e.g., "/product/123") */
+    val deepLinkPath: String? = null,
+    /** Custom URI scheme (e.g., "myapp") */
+    val appScheme: String? = null,
+    val clickedAt: String? = null,
+    val linkId: String? = null
+) {
+    /** Parse clickedAt as an Instant */
+    fun clickedAtDate(): Instant?
+}
+
+data class UTMParameters(
+    val source: String? = null,
+    val medium: String? = null,
+    val campaign: String? = null,
+    val term: String? = null,
+    val content: String? = null
+)
+
+data class InstallResponse(
+    val installId: String,
+    val attributed: Boolean,
+    /** Attribution confidence score (0-100) */
+    val confidenceScore: Int,
+    /** Matched fingerprint factors (e.g., ["ip", "user_agent", "timezone"]) */
+    val matchedFactors: List<String>,
+    val deepLinkData: DeepLinkData?
+)
+
+data class CreateLinkOptions(
+    val templateId: String? = null,    // auto-selected when null
+    val templateSlug: String? = null,
+    val deepLinkParameters: Map<String, String>? = null,
+    val title: String? = null,
+    val description: String? = null,
+    val customCode: String? = null,
+    val utmParameters: UTMParameters? = null
+)
+
+data class CreateLinkResult(
+    val url: String,                   // full shareable URL
+    val shortCode: String,
+    val linkId: String
+)
+
+/** All errors thrown by the SDK */
+sealed class LinkFortyError(message: String, cause: Throwable? = null) : Exception(message, cause) {
+    class NotInitialized : LinkFortyError("SDK not initialized")
+    class AlreadyInitialized : LinkFortyError("SDK already initialized")
+    class InvalidConfiguration(detail: String) : LinkFortyError(detail)
+    class NetworkError(cause: Throwable) : LinkFortyError("Network error", cause)
+    class InvalidResponse(statusCode: Int?, responseMessage: String?) : LinkFortyError("...")
+    class DecodingError(cause: Throwable) : LinkFortyError("Decoding error", cause)
+    class EncodingError(cause: Throwable) : LinkFortyError("Encoding error", cause)
+    class InvalidEventData(detail: String) : LinkFortyError(detail)
+    class InvalidDeepLinkUrl(detail: String) : LinkFortyError(detail)
+    class MissingApiKey : LinkFortyError("API key required for this operation")
+}
+```
+
+## SDK API
+
+Initialize with the static `LinkForty.initialize()` method, then use `LinkForty.shared` for all other calls. All async methods are Kotlin `suspend` functions — call from a coroutine scope.
+
+```kotlin
+import com.linkforty.sdk.LinkForty
+import com.linkforty.sdk.models.LinkFortyConfig
+```
+
+### LinkForty.initialize(context, config): InstallResponse (suspend)
+
+Initialize the SDK, report the install, and return attribution data. Must be called before any other method.
+
+```kotlin
+val config = LinkFortyConfig(
+    baseURL = "https://go.yourdomain.com",
+    apiKey = "lf_live_abc123",   // optional — only for createLink()
+    debug = BuildConfig.DEBUG
+)
+
+lifecycleScope.launch {
+    val response = LinkForty.initialize(
+        context = applicationContext,
+        config = config
+    )
+
+    Log.d("LinkForty", "Install ID: ${response.installId}")
+    Log.d("LinkForty", "Attributed: ${response.attributed}")
+    Log.d("LinkForty", "Confidence: ${response.confidenceScore}")
+}
+```
+
+### onDeepLink(callback)
+
+Register a callback for direct deep links — fires when user taps an App Link and the app is already installed. Callbacks execute on the main thread.
+
+```kotlin
+LinkForty.shared.onDeepLink { uri, data ->
+    Log.d("LinkForty", "Deep link opened: $uri")
+    data?.customParameters?.let { params ->
+        val route = params["route"]
+        val id = params["id"]
+        if (route != null && id != null) {
+            navigateToContent(route, id)
+        }
+    }
+}
+```
+
+### onDeferredDeepLink(callback)
+
+Register a callback for deferred deep links — fires on first app launch if the install was attributed to a link click.
+
+```kotlin
+LinkForty.shared.onDeferredDeepLink { data ->
+    data?.let {
+        Log.d("LinkForty", "Attributed install from: ${it.shortCode}")
+        it.customParameters?.let { params ->
+            val route = params["route"]
+            val id = params["id"]
+            if (route != null && id != null) {
+                navigateToContent(route, id)
+            }
+        }
+    }
+}
+```
+
+### handleDeepLink(uri)
+
+Forward App Link intents to the SDK. Call from `onCreate()` and `onNewIntent()`.
+
+```kotlin
+intent.data?.let { uri ->
+    LinkForty.shared.handleDeepLink(uri)
+}
+```
+
+### trackEvent(name, properties) (suspend)
+
+Track in-app events. Failed sends are queued offline (max 100 events) and retried automatically.
+
+```kotlin
+lifecycleScope.launch {
+    LinkForty.shared.trackEvent(
+        name = "add_to_cart",
+        properties = mapOf("productId" to "789", "price" to 29.99)
+    )
+}
+```
+
+### trackRevenue(amount, currency, properties) (suspend)
+
+Track revenue events. Uses `BigDecimal` for precision.
+
+```kotlin
+lifecycleScope.launch {
+    LinkForty.shared.trackRevenue(
+        amount = BigDecimal("29.99"),
+        currency = "USD",
+        properties = mapOf("productId" to "789", "orderId" to "order_123")
+    )
+}
+```
+
+### createLink(options): CreateLinkResult (suspend)
+
+Create a shareable link. Requires `apiKey` in config.
+
+```kotlin
+lifecycleScope.launch {
+    val result = LinkForty.shared.createLink(
+        options = CreateLinkOptions(
+            deepLinkParameters = mapOf("route" to "product", "productId" to "789"),
+            title = "Check out this product!",
+            utmParameters = UTMParameters(source = "in_app_share", medium = "referral")
+        )
+    )
+
+    Log.d("LinkForty", "URL: ${result.url}")        // https://go.yourdomain.com/tmpl/abc12345
+    Log.d("LinkForty", "Code: ${result.shortCode}")  // abc12345
+    Log.d("LinkForty", "ID: ${result.linkId}")        // uuid
+}
+```
+
+### Offline Event Queue
+
+```kotlin
+LinkForty.shared.queuedEventCount            // number of events waiting
+lifecycleScope.launch { LinkForty.shared.flushEvents() }  // manually flush
+LinkForty.shared.clearEventQueue()            // clear without sending
+```
+
+### Utility Methods
+
+```kotlin
+LinkForty.shared.getInstallId()     // String?
+LinkForty.shared.getInstallData()   // DeepLinkData?
+LinkForty.shared.isFirstLaunch()    // Boolean
+LinkForty.shared.clearData()        // clear all stored data
+LinkForty.shared.reset()            // reset to uninitialized state
+```
+
+## App Links Setup
+
+### 1. AndroidManifest.xml
+
+Add an intent filter with `android:autoVerify="true"` to your main activity:
+
+```xml
+<activity
+    android:name=".MainActivity"
+    android:launchMode="singleTask"
+    android:exported="true">
+
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+    </intent-filter>
+
+    <!-- LinkForty App Links -->
+    <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" android:host="go.yourdomain.com" />
+    </intent-filter>
+</activity>
+```
+
+`android:launchMode="singleTask"` is required so `onNewIntent()` fires when the app is already running.
+
+### 2. SHA-256 Fingerprint
+
+Configure your app's signing certificate fingerprint in the LinkForty dashboard (Settings → App Configuration).
+
+```bash
+# Debug keystore
+keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android
+
+# Release keystore
+keytool -list -v -keystore your-release.keystore -alias your-alias
+```
+
+### 3. Digital Asset Links
+
+LinkForty automatically serves `/.well-known/assetlinks.json` from your domain. No manual file hosting needed.
+
+## Complete Activity Example
+
+```kotlin
+// MainActivity.kt
+package com.example.myapp
+
+import android.content.Intent
+import android.os.Bundle
+import android.util.Log
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.linkforty.sdk.LinkForty
+import com.linkforty.sdk.models.LinkFortyConfig
+import kotlinx.coroutines.launch
+
+class MainActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        lifecycleScope.launch {
+            val config = LinkFortyConfig(
+                baseURL = "https://go.yourdomain.com",
+                apiKey = "lf_live_abc123",
+                debug = BuildConfig.DEBUG
+            )
+            val response = LinkForty.initialize(
+                context = applicationContext,
+                config = config
+            )
+
+            LinkForty.shared.onDeferredDeepLink { data ->
+                data?.let { routeToContent(it) }
+            }
+
+            LinkForty.shared.onDeepLink { uri, data ->
+                data?.let { routeToContent(it) }
+            }
+
+            if (response.attributed) {
+                Log.d("LinkForty", "Attributed! Confidence: ${response.confidenceScore}")
+            }
+        }
+
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        intent.data?.let { uri ->
+            LinkForty.shared.handleDeepLink(uri)
+        }
+    }
+
+    private fun routeToContent(data: com.linkforty.sdk.models.DeepLinkData) {
+        val route = data.customParameters?.get("route") ?: return
+        val id = data.customParameters?.get("id") ?: return
+
+        runOnUiThread {
+            when (route) {
+                "product" -> startActivity(
+                    Intent(this, ProductActivity::class.java).putExtra("id", id)
+                )
+                "profile" -> startActivity(
+                    Intent(this, ProfileActivity::class.java).putExtra("id", id)
+                )
+            }
+        }
+    }
+}
+```
+
+## Complete Jetpack Compose Example
+
+```kotlin
+// MainActivity.kt
+package com.example.myapp
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.linkforty.sdk.LinkForty
+import com.linkforty.sdk.models.LinkFortyConfig
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        lifecycleScope.launch {
+            val config = LinkFortyConfig(
+                baseURL = "https://go.yourdomain.com",
+                apiKey = "lf_live_abc123",
+                debug = BuildConfig.DEBUG
+            )
+            LinkForty.initialize(context = applicationContext, config = config)
+        }
+
+        intent.data?.let { LinkForty.shared.handleDeepLink(it) }
+
+        setContent {
+            val navController = rememberNavController()
+
+            LaunchedEffect(Unit) {
+                LinkForty.shared.onDeepLink { _, data ->
+                    data?.customParameters?.let { params ->
+                        val route = params["route"]
+                        val id = params["id"]
+                        if (route != null && id != null) {
+                            navController.navigate("$route/$id")
+                        }
+                    }
+                }
+
+                LinkForty.shared.onDeferredDeepLink { data ->
+                    data?.customParameters?.let { params ->
+                        val route = params["route"]
+                        val id = params["id"]
+                        if (route != null && id != null) {
+                            navController.navigate("$route/$id")
+                        }
+                    }
+                }
+            }
+
+            NavHost(navController = navController, startDestination = "home") {
+                composable("home") { HomeScreen() }
+                composable("product/{id}") { backStackEntry ->
+                    ProductScreen(id = backStackEntry.arguments?.getString("id") ?: "")
+                }
+                composable("profile/{id}") { backStackEntry ->
+                    ProfileScreen(id = backStackEntry.arguments?.getString("id") ?: "")
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.data?.let { LinkForty.shared.handleDeepLink(it) }
+    }
+}
+```
+
+## Testing Deep Links
+
+```bash
+# Android Emulator
+adb shell am start -a android.intent.action.VIEW -d "https://go.yourdomain.com/abc123"
+```
+
+## Self-Hosted vs Cloud
+
+The only change is the `baseURL`:
+
+```kotlin
+// Cloud (managed SaaS)
+val config = LinkFortyConfig(baseURL = "https://go.linkforty.com")
+
+// Self-hosted (@linkforty/core)
+val config = LinkFortyConfig(baseURL = "https://links.yourdomain.com")
+```
+
+All SDK methods work identically with both.

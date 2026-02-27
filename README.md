@@ -1,6 +1,6 @@
 # LinkForty Android SDK
 
-**Native Android SDK for deep linking, mobile attribution, and conversion tracking.**
+Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the open-source alternative to Branch.io, AppsFlyer OneLink, and Firebase Dynamic Links. Add deferred deep linking, mobile attribution, and smart link routing to your Android app. Self-hosted, privacy-first, no per-click pricing. 100% Kotlin with modern coroutines APIs.
 
 [![API Level](https://img.shields.io/badge/API-26%2B-brightgreen.svg)](https://developer.android.com/about/versions/oreo)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-7F52FF.svg)](https://kotlinlang.org)
@@ -331,12 +331,12 @@ This SDK requires a running LinkForty backend:
 - **LinkForty Core** (open source): Self-host for free
 - **LinkForty Cloud** (SaaS): Managed service with advanced features
 
-See: https://github.com/linkforty/core
+See: https://github.com/LinkForty/core
 
 ## Support
 
-- **Documentation**: https://docs.linkforty.com
-- **Issues**: https://github.com/LinkForty/mobile-sdk-android/issues
+- **Documentation**: [docs.linkforty.com](https://docs.linkforty.com)
+- **Issues**: [GitHub Issues](https://github.com/LinkForty/mobile-sdk-android/issues)
 
 ## Changelog
 
@@ -346,12 +346,15 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 LinkForty Android SDK is available under the MIT license. See [LICENSE](LICENSE) for more info.
 
+## Other SDKs
+
+| Platform | Package |
+|----------|---------|
+| React Native | [`@linkforty/mobile-sdk-react-native`](https://github.com/LinkForty/mobile-sdk-react-native) |
+| Expo | [`@linkforty/mobile-sdk-expo`](https://github.com/LinkForty/mobile-sdk-expo) |
+| iOS (Swift) | [LinkFortySDK](https://github.com/LinkForty/mobile-sdk-ios) |
+
 ## Related Projects
 
-- [LinkForty Core](https://github.com/linkforty/core) - Open source deep linking backend
-- [LinkForty iOS SDK](https://github.com/linkforty/mobile-sdk-ios) - iOS SDK
-- [LinkForty React Native SDK](https://github.com/linkforty/mobile-sdk-react-native) - React Native integration
-
----
-
-Made with care by the LinkForty team
+- [LinkForty Core](https://github.com/LinkForty/core) — open-source self-hosted deep linking engine
+- [LinkForty Cloud](https://linkforty.com) — hosted SaaS with dashboard, teams, and billing

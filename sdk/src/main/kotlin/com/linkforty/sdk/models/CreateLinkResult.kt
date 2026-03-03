@@ -14,5 +14,8 @@ data class CreateLinkResult(
     val shortCode: String,
 
     /** Link UUID */
-    val linkId: String
+    val linkId: String,
+
+    /** True if an existing link was returned instead of creating a new one (per-user deduplication) */
+    val deduplicated: Boolean? = null
 )

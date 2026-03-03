@@ -26,5 +26,8 @@ data class CreateLinkOptions(
     val customCode: String? = null,
 
     /** UTM parameters for campaign tracking */
-    val utmParameters: UTMParameters? = null
+    val utmParameters: UTMParameters? = null,
+
+    /** Identifier for the app user creating the link (enables per-user deduplication and share attribution) */
+    val externalUserId: String? = null
 )

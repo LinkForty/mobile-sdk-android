@@ -294,7 +294,8 @@ class LinkForty private constructor() {
             CreateLinkResult(
                 url = url,
                 shortCode = response.shortCode,
-                linkId = response.id
+                linkId = response.id,
+                deduplicated = null
             )
         } else {
             // Use simplified SDK endpoint (auto-selects template)

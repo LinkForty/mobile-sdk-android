@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-03
+
 ### Added
+- `externalUserId` parameter to `CreateLinkOptions` for per-user deduplication and share attribution
+- `deduplicated` field to `CreateLinkResult` indicating when an existing link was returned
 - `llms.txt` — LLM-optimized integration reference for AI coding assistants
 
 ## [1.0.0] - 2026-02-16

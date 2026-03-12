@@ -74,6 +74,7 @@ class LinkForty private constructor() {
     private var attributionManager: AttributionManager? = null
     private var eventTracker: EventTracker? = null
     private var deepLinkHandler: DeepLinkHandler? = null
+    private var externalUserId: String? = null
     private val mutex = Mutex()
     private var isInitialized = false
 
@@ -188,6 +189,24 @@ class LinkForty private constructor() {
         deepLinkHandler?.onDeepLink(callback)
     }
 
+    // -- User Identity --
+
+    /**
+     * Sets the external user ID for attribution. This ID will be attached to all
+     * links created via [createLink] unless overridden per-call. Pass null to clear.
+     *
+     * @param id External user ID string, or null to clear
+     */
+    fun setExternalUserId(id: String?) {
+        this.externalUserId = id
+        LinkFortyLogger.log("External user ID set: $id")
+    }
+
+    /**
+     * Returns the current external user ID, if set.
+     */
+    fun getExternalUserId(): String? = externalUserId
+
     // -- Event Tracking --
 
     /**
@@ -273,17 +292,24 @@ class LinkForty private constructor() {
 
         val networkManager = networkManager ?: throw LinkFortyError.NotInitialized()
 
-        return if (options.templateId != null) {
+        // Per-call externalUserId takes precedence, then fall back to SDK-level value
+        val resolvedOptions = if (options.externalUserId == null && externalUserId != null) {
+            options.copy(externalUserId = externalUserId)
+        } else {
+            options
+        }
+
+        return if (resolvedOptions.templateId != null) {
             // Use dashboard endpoint with explicit templateId
             val response: DashboardCreateLinkResponse = networkManager.request(
                 endpoint = "/api/links",
                 method = HttpMethod.POST,
-                body = options
+                body = resolvedOptions
             )
 
             // Construct URL from parts
             val baseUrl = config.baseURL.trimEnd('/')
-            val templateSlug = options.templateSlug ?: ""
+            val templateSlug = resolvedOptions.templateSlug ?: ""
             val pathSegment = if (templateSlug.isEmpty()) {
                 response.shortCode
             } else {
@@ -302,7 +328,7 @@ class LinkForty private constructor() {
             networkManager.request(
                 endpoint = "/api/sdk/v1/links",
                 method = HttpMethod.POST,
-                body = options
+                body = resolvedOptions
             )
         }
     }
@@ -342,6 +368,7 @@ class LinkForty private constructor() {
         attributionManager?.clearData()
         eventTracker?.clearQueue()
         deepLinkHandler?.clearCallbacks()
+        externalUserId = null
         LinkFortyLogger.log("All SDK data cleared")
     }
 
@@ -355,6 +382,7 @@ class LinkForty private constructor() {
         attributionManager = null
         eventTracker = null
         deepLinkHandler = null
+        externalUserId = null
         isInitialized = false
         instance = null
         LinkFortyLogger.log("SDK reset to uninitialized state")

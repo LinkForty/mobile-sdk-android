@@ -50,6 +50,7 @@ dependencies {
 data class LinkFortyConfig(
     val baseURL: String,
     val apiKey: String? = null,        // only needed for createLink()
+    val appToken: String? = null,      // Cloud only — recommended; enables organic-install attribution
     val debug: Boolean = false,
     val attributionWindowHours: Int = 168  // 7 days, range: 1-2160
 )
@@ -138,7 +139,8 @@ Initialize the SDK, report the install, and return attribution data. Must be cal
 ```kotlin
 val config = LinkFortyConfig(
     baseURL = "https://go.yourdomain.com",
-    apiKey = "lf_live_abc123",   // optional — only for createLink()
+    apiKey = "lf_live_abc123",      // optional — only for createLink()
+    appToken = "at_a1b2c3d4...",    // recommended for Cloud — enables organic-install attribution
     debug = BuildConfig.DEBUG
 )
 
@@ -335,6 +337,7 @@ class MainActivity : AppCompatActivity() {
             val config = LinkFortyConfig(
                 baseURL = "https://go.yourdomain.com",
                 apiKey = "lf_live_abc123",
+                appToken = "at_a1b2c3d4...",
                 debug = BuildConfig.DEBUG
             )
             val response = LinkForty.initialize(
@@ -415,6 +418,7 @@ class MainActivity : ComponentActivity() {
             val config = LinkFortyConfig(
                 baseURL = "https://go.yourdomain.com",
                 apiKey = "lf_live_abc123",
+                appToken = "at_a1b2c3d4...",
                 debug = BuildConfig.DEBUG
             )
             LinkForty.initialize(context = applicationContext, config = config)

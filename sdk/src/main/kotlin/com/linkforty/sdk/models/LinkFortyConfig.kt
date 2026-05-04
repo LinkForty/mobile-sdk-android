@@ -8,12 +8,18 @@ import java.net.URI
  *
  * @property baseURL The base URL of your LinkForty instance (e.g., "https://go.yourdomain.com")
  * @property apiKey Optional API key for LinkForty Cloud authentication
+ * @property appToken Optional public workspace token for LinkForty Cloud. Recommended —
+ *   required for organic installs (App Store discovery, social mentions, etc.) to be
+ *   attributed to your workspace. Find it in the dashboard under Workspace Settings →
+ *   App Token. Safe to ship in your app bundle — identifies the workspace only, can't
+ *   authenticate API actions. Format: `at_<32 hex chars>`.
  * @property debug Enable debug logging (default: false)
  * @property attributionWindowHours Attribution window in hours (default: 168 = 7 days)
  */
 data class LinkFortyConfig(
     val baseURL: String,
     val apiKey: String? = null,
+    val appToken: String? = null,
     val debug: Boolean = false,
     val attributionWindowHours: Int = 168
 ) {
@@ -56,6 +62,7 @@ data class LinkFortyConfig(
         append("LinkFortyConfig(")
         append("baseURL=$baseURL, ")
         append("apiKey=${if (apiKey != null) "***" else "null"}, ")
+        append("appToken=${if (appToken != null) "***" else "null"}, ")
         append("debug=$debug, ")
         append("attributionWindowHours=$attributionWindowHours")
         append(")")

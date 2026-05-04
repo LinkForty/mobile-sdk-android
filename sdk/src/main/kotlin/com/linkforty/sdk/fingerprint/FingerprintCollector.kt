@@ -13,7 +13,8 @@ import java.util.TimeZone
 internal interface FingerprintCollectorProtocol {
     fun collectFingerprint(
         attributionWindowHours: Int,
-        deviceId: String? = null
+        deviceId: String? = null,
+        appToken: String? = null
     ): DeviceFingerprint
 }
 
@@ -26,7 +27,8 @@ internal class FingerprintCollector(
 
     override fun collectFingerprint(
         attributionWindowHours: Int,
-        deviceId: String?
+        deviceId: String?,
+        appToken: String?
     ): DeviceFingerprint {
         val (screenWidth, screenHeight) = getScreenDimensions()
 
@@ -40,7 +42,8 @@ internal class FingerprintCollector(
             platformVersion = Build.VERSION.RELEASE,
             appVersion = getAppVersion(),
             deviceId = deviceId,
-            attributionWindowHours = attributionWindowHours
+            attributionWindowHours = attributionWindowHours,
+            appToken = appToken
         )
     }
 

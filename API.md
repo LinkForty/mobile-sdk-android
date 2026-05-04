@@ -57,7 +57,8 @@ suspend fun initialize(
 ```kotlin
 val config = LinkFortyConfig(
     baseURL = "https://go.yourdomain.com",
-    apiKey = "your-api-key"
+    apiKey = "your-api-key",
+    appToken = "at_a1b2c3d4..."   // recommended for Cloud — enables organic-install attribution
 )
 val response = LinkForty.initialize(context, config)
 Log.d("LinkForty", "Install ID: ${response.installId}")
@@ -313,6 +314,7 @@ Configuration for the LinkForty SDK.
 data class LinkFortyConfig(
     val baseURL: String,
     val apiKey: String? = null,
+    val appToken: String? = null,
     val debug: Boolean = false,
     val attributionWindowHours: Int = 168
 )
@@ -321,6 +323,7 @@ data class LinkFortyConfig(
 **Parameters:**
 - `baseURL`: Backend URL (must be HTTPS except localhost/127.0.0.1/10.0.2.2)
 - `apiKey`: API key (optional for self-hosted)
+- `appToken`: Public workspace token (LinkForty Cloud only). Recommended — required for organic installs (App Store discovery, social mentions, etc.) to be attributed to your workspace. Find it in the dashboard under Workspace Settings → App Token. Format: `at_<32 hex chars>`. Safe to ship in your app bundle.
 - `debug`: Enable debug logging (default: false)
 - `attributionWindowHours`: Attribution window in hours (default: 168 = 7 days, max: 2160 = 90 days)
 

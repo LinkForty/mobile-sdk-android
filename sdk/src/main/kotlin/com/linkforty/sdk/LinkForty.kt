@@ -135,7 +135,8 @@ class LinkForty private constructor() {
         // Report install and get attribution data (outside the lock)
         val response = attributionManager!!.reportInstall(
             attributionWindowHours = attributionWindowHours,
-            deviceId = deviceId
+            deviceId = deviceId,
+            appToken = config.appToken
         )
 
         // If attributed, notify deferred deep link handler

@@ -22,17 +22,20 @@ internal class AttributionManager(
      *
      * @param attributionWindowHours Attribution window in hours
      * @param deviceId Optional device ID (GAID) if user consented
+     * @param appToken Optional public workspace token (Cloud organic-install scoping)
      * @return Install response with attribution data
      * @throws LinkFortyError on failure
      */
     suspend fun reportInstall(
         attributionWindowHours: Int,
-        deviceId: String? = null
+        deviceId: String? = null,
+        appToken: String? = null
     ): InstallResponse {
         // Collect device fingerprint
         val fingerprint = fingerprintCollector.collectFingerprint(
             attributionWindowHours = attributionWindowHours,
-            deviceId = deviceId
+            deviceId = deviceId,
+            appToken = appToken
         )
 
         LinkFortyLogger.log("Reporting install with fingerprint: $fingerprint")

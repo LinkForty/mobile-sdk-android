@@ -14,6 +14,8 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 - **Custom URL Schemes**: Handle custom app URL schemes
 - **Event Tracking**: Track in-app events and conversions
 - **Revenue Tracking**: Dedicated revenue tracking with BigDecimal precision
+- **Last-Click Attribution**: In-app events are automatically credited to the deep link that most recently opened the app
+- **Screen-Flow Tracking**: Report screen views (manually or automatically via a Jetpack Navigation listener) to see what users do after clicking a link
 - **Offline Support**: Queue events when offline with automatic retry (max 100 events)
 - **Programmatic Link Creation**: Create short links directly from your app
 - **Privacy-First**: No GAID collection by default
@@ -172,7 +174,29 @@ LinkForty.shared.trackRevenue(
 )
 ```
 
-### 5. Create Links Programmatically
+Every event is automatically stamped with the deep link that most recently opened the app (last-click attribution), so the dashboard can show what users do *after* clicking a link. Events with no preceding deep-link open are reported as organic. No extra code is required.
+
+### 5. Track Screen Views
+
+Reporting screen views lets the dashboard build a per-link screen-flow funnel. Each `screen_view` carries the same last-click attribution stamp as other events.
+
+**Automatic (Jetpack Navigation)** — attach `LinkFortyNavObserver` to your `NavController`. Each destination's `route` (Compose) or `label` (XML nav graph) is reported as it appears:
+
+```kotlin
+import com.linkforty.sdk.navigation.LinkFortyNavObserver
+
+navController.addOnDestinationChangedListener(LinkFortyNavObserver())
+```
+
+> `LinkFortyNavObserver` requires `androidx.navigation`, which your app already has if it uses Jetpack Navigation. The SDK depends on it only as `compileOnly`, so apps that don't use Navigation aren't affected.
+
+**Manual** — call it yourself (e.g. for screens not driven by a `NavController`):
+
+```kotlin
+LinkForty.shared.trackScreenView("ProductDetail")
+```
+
+### 6. Create Links Programmatically
 
 ```kotlin
 val result = LinkForty.shared.createLink(

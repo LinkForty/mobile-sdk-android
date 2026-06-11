@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+### Added
+- The SDK now identifies itself on every request: a `sdkName` (`"android"`) and `sdkVersion` field is included on the install and event payloads, and an `X-LinkForty-SDK: android/<version>` header is sent on all requests. This lets the backend report which SDKs and versions are in use and flag outdated integrations. The reported version is sourced from `BuildConfig` so it always matches the published artifact. No API or integration changes are required.
+- **Last-click attribution for in-app events.** Every tracked event is now stamped with the deep link that most recently opened the app (deferred install *or* direct re-engagement) plus an app-open `sessionId`, so the backend can credit in-app activity to the originating link. The newest deep-link open supersedes the previous one, and the active link is persisted across app restarts; events with no preceding deep-link open stay organic (session only). Fully automatic.
+- **Screen-view tracking** for per-link screen-flow funnels. New `LinkForty.shared.trackScreenView(name)` emits a `screen_view` event (carrying the screen name, the previous screen, and the active attribution stamp). For automatic tracking with Jetpack Navigation, attach `LinkFortyNavObserver` to your `NavController` (`androidx.navigation` is a `compileOnly` dependency, so apps that don't use Navigation are unaffected).
 
 ## [1.2.0] - 2026-05-04
 ### Added

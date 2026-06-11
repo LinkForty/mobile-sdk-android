@@ -13,6 +13,7 @@ Complete API reference for the LinkForty Android SDK.
 - [UTMParameters](#utmparameters) - UTM tracking parameters
 - [LinkFortyError](#linkfortyerror) - Error types
 - [Type Aliases](#type-aliases) - Callback types
+- [LinkFortyNavObserver](#linkfortynavobserver) - Automatic screen-view tracking
 
 ---
 
@@ -215,6 +216,32 @@ LinkForty.shared.trackRevenue(
     properties = mapOf("product_id" to "123")
 )
 ```
+
+---
+
+#### trackScreenView(name, properties)
+
+Reports a screen view. Emits a `screen_view` event carrying the screen name and the previously tracked screen, stamped with the active last-click attribution context, so the dashboard can build a per-link screen-flow funnel.
+
+```kotlin
+suspend fun trackScreenView(
+    name: String,
+    properties: Map<String, Any>? = null
+)
+```
+
+**Parameters:**
+- `name`: Screen name (e.g., "ProductDetail"). Must not be blank.
+- `properties`: Optional additional properties
+
+**Throws:** `LinkFortyError` if tracking fails (including a blank screen name)
+
+**Example:**
+```kotlin
+LinkForty.shared.trackScreenView("ProductDetail")
+```
+
+For automatic tracking with Jetpack Navigation, use [`LinkFortyNavObserver`](#linkfortynavobserver).
 
 ---
 
@@ -490,6 +517,30 @@ typealias DeferredDeepLinkCallback = (DeepLinkData?) -> Unit
 
 ```kotlin
 typealias DeepLinkCallback = (Uri, DeepLinkData?) -> Unit
+```
+
+---
+
+## LinkFortyNavObserver
+
+A `NavController.OnDestinationChangedListener` that automatically reports a `screen_view` (see [`trackScreenView`](#trackscreenviewname-properties)) whenever the Jetpack Navigation destination changes.
+
+Requires `androidx.navigation`, which your app already provides if it uses Jetpack Navigation. The SDK depends on it only as `compileOnly`, so apps that don't use Navigation are unaffected.
+
+```kotlin
+class LinkFortyNavObserver(
+    screenNameExtractor: (NavDestination) -> String? = ::defaultScreenName,
+    scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
+) : NavController.OnDestinationChangedListener
+```
+
+By default a destination's `route` (Compose navigation) or `label` (XML nav graph) is used as the screen name; destinations with neither are skipped. Pass `screenNameExtractor` to customize.
+
+**Example:**
+```kotlin
+import com.linkforty.sdk.navigation.LinkFortyNavObserver
+
+navController.addOnDestinationChangedListener(LinkFortyNavObserver())
 ```
 
 ---

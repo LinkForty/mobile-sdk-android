@@ -7,6 +7,7 @@ moshi = "1.15.1"
 coroutines = "1.8.0"
 junit5 = "5.10.2"
 mockk = "1.13.10"
+mavenPublish = "0.30.0"
 
 [libraries]
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
@@ -24,3 +25,4 @@ mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+maven-publish-vanniktech = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }

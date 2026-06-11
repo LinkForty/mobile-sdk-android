@@ -1,9 +1,11 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
-    `maven-publish`
-    signing
+    alias(libs.plugins.maven.publish.vanniktech)
 }
 
 android {
@@ -69,63 +71,20 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
 }
 
-// Maven Central publishing
-publishing {
-    publications {
-        create<MavenPublication>("release") {
-            groupId = property("GROUP").toString()
-            artifactId = property("POM_ARTIFACT_ID").toString()
-            version = property("VERSION_NAME").toString()
+// Maven Central publishing via the Central Portal (central.sonatype.com).
+// Coordinates (GROUP / POM_ARTIFACT_ID / VERSION_NAME) and POM metadata (POM_*)
+// are read automatically from gradle.properties. Credentials and the signing key
+// come from ~/.gradle/gradle.properties (mavenCentralUsername / mavenCentralPassword
+// / signingInMemoryKey / signingInMemoryKeyPassword) — never committed.
+mavenPublishing {
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    signAllPublications()
 
-            afterEvaluate {
-                from(components["release"])
-            }
-
-            pom {
-                name.set(property("POM_NAME").toString())
-                description.set(property("POM_DESCRIPTION").toString())
-                url.set(property("POM_URL").toString())
-
-                licenses {
-                    license {
-                        name.set(property("POM_LICENCE_NAME").toString())
-                        url.set(property("POM_LICENCE_URL").toString())
-                    }
-                }
-
-                developers {
-                    developer {
-                        id.set(property("POM_DEVELOPER_ID").toString())
-                        name.set(property("POM_DEVELOPER_NAME").toString())
-                        url.set(property("POM_DEVELOPER_URL").toString())
-                    }
-                }
-
-                scm {
-                    url.set(property("POM_SCM_URL").toString())
-                    connection.set(property("POM_SCM_CONNECTION").toString())
-                    developerConnection.set(property("POM_SCM_DEV_CONNECTION").toString())
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            name = "sonatype"
-            val releasesUrl = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-            val snapshotsUrl = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl
-
-            credentials {
-                username = findProperty("ossrhUsername")?.toString() ?: System.getenv("OSSRH_USERNAME")
-                password = findProperty("ossrhPassword")?.toString() ?: System.getenv("OSSRH_PASSWORD")
-            }
-        }
-    }
-}
-
-signing {
-    useGpgCmd()
-    sign(publishing.publications["release"])
+    configure(
+        AndroidSingleVariantLibrary(
+            variant = "release",
+            sourcesJar = true,
+            publishJavadocJar = true,
+        )
+    )
 }

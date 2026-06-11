@@ -1,5 +1,6 @@
 package com.linkforty.sdk.events
 
+import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.errors.LinkFortyError
 import com.linkforty.sdk.models.EventResponse
 import com.linkforty.sdk.network.HttpMethod
@@ -22,6 +23,7 @@ class EventTrackerTest {
     private lateinit var mockStorage: MockStorageManager
     private lateinit var networkManager: NetworkManager
     private lateinit var eventQueue: EventQueue
+    private lateinit var attributionContext: AttributionContext
     private lateinit var sut: EventTracker
 
     @BeforeEach
@@ -36,7 +38,8 @@ class EventTrackerTest {
         )
         networkManager = NetworkManager(config, mockHttpClient)
         eventQueue = EventQueue()
-        sut = EventTracker(networkManager, mockStorage, eventQueue)
+        attributionContext = AttributionContext(mockStorage)
+        sut = EventTracker(networkManager, mockStorage, attributionContext, eventQueue)
     }
 
     // -- Track Event Tests --
@@ -55,6 +58,52 @@ class EventTrackerTest {
     fun `trackEvent throws for empty name`() = runTest {
         assertThrows<LinkFortyError.InvalidEventData> {
             sut.trackEvent("")
+        }
+    }
+
+    // -- Last-click attribution + screen views (SIT-237) --
+
+    @Test
+    fun `trackEvent stamps the active last-click attribution`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        attributionContext.recordDeepLinkOpen("link-A", "click-1")
+
+        sut.trackEvent("purchase")
+
+        val body = String(mockHttpClient.lastBody!!)
+        assertTrue(body.contains("\"attributedLinkId\":\"link-A\""))
+        assertTrue(body.contains("\"attributedClickId\":\"click-1\""))
+        assertTrue(body.contains("\"sessionId\":"))
+    }
+
+    @Test
+    fun `organic event carries a session but no link`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+
+        sut.trackEvent("organic_event")
+
+        val body = String(mockHttpClient.lastBody!!)
+        assertTrue(body.contains("\"sessionId\":"))
+        assertTrue(!body.contains("attributedLinkId"))
+    }
+
+    @Test
+    fun `trackScreenView emits screen_view with screen and previousScreen`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+
+        sut.trackScreenView("Home")
+        sut.trackScreenView("ProductDetail")
+
+        val body = String(mockHttpClient.lastBody!!)
+        assertTrue(body.contains("\"eventName\":\"screen_view\""))
+        assertTrue(body.contains("\"screen\":\"ProductDetail\""))
+        assertTrue(body.contains("\"previousScreen\":\"Home\""))
+    }
+
+    @Test
+    fun `trackScreenView throws for empty name`() = runTest {
+        assertThrows<LinkFortyError.InvalidEventData> {
+            sut.trackScreenView("  ")
         }
     }
 

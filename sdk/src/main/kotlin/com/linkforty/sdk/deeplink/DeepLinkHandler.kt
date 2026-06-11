@@ -2,6 +2,7 @@ package com.linkforty.sdk.deeplink
 
 import android.net.Uri
 import com.linkforty.sdk.LinkFortyLogger
+import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.fingerprint.FingerprintCollectorProtocol
 import com.linkforty.sdk.models.DeepLinkData
 import com.linkforty.sdk.network.HttpMethod
@@ -45,6 +46,9 @@ internal class DeepLinkHandler {
     /** Base URL for detecting LinkForty URLs */
     private var baseURL: String? = null
 
+    /** Last-click attribution context updated on each deep-link open */
+    private var attributionContext: AttributionContext? = null
+
     /** Flag to track if deferred deep link has been delivered */
     private var deferredDeepLinkDelivered = false
 
@@ -57,11 +61,13 @@ internal class DeepLinkHandler {
     fun configure(
         networkManager: NetworkManagerProtocol,
         fingerprintCollector: FingerprintCollectorProtocol,
-        baseURL: String
+        baseURL: String,
+        attributionContext: AttributionContext? = null
     ) {
         this.networkManager = networkManager
         this.fingerprintCollector = fingerprintCollector
         this.baseURL = baseURL
+        this.attributionContext = attributionContext
     }
 
     // -- Deferred Deep Link (Install Attribution) --
@@ -100,6 +106,9 @@ internal class DeepLinkHandler {
 
                 deferredDeepLinkCallbacks.toList()
             }
+
+            // Pin last-click attribution to this deferred (install) open.
+            attributionContext?.recordDeepLinkOpen(deepLinkData?.linkId)
 
             withContext(Dispatchers.Main) {
                 callbacks.forEach { it(deepLinkData) }
@@ -141,6 +150,9 @@ internal class DeepLinkHandler {
             }
 
             if (resolvedData != null) {
+                // Pin last-click attribution to this direct (re-engagement) open;
+                // supersedes any prior context. Organic/unresolved opens are a no-op.
+                attributionContext?.recordDeepLinkOpen(resolvedData.linkId)
                 LinkFortyLogger.log("Parsed deep link: $resolvedData")
             } else {
                 LinkFortyLogger.log("Failed to parse deep link URL")

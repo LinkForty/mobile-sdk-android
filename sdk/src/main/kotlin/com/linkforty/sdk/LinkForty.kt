@@ -2,6 +2,7 @@ package com.linkforty.sdk
 
 import android.content.Context
 import android.net.Uri
+import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.attribution.AttributionManager
 import com.linkforty.sdk.deeplink.DeepLinkCallback
 import com.linkforty.sdk.deeplink.DeepLinkHandler
@@ -72,6 +73,7 @@ class LinkForty private constructor() {
     private var config: LinkFortyConfig? = null
     private var networkManager: NetworkManager? = null
     private var attributionManager: AttributionManager? = null
+    private var attributionContext: AttributionContext? = null
     private var eventTracker: EventTracker? = null
     private var deepLinkHandler: DeepLinkHandler? = null
     private var externalUserId: String? = null
@@ -108,6 +110,9 @@ class LinkForty private constructor() {
 
             this.networkManager = networkManager
 
+            val attributionContext = AttributionContext(storageManager, config.debug)
+            this.attributionContext = attributionContext
+
             this.attributionManager = AttributionManager(
                 networkManager = networkManager,
                 storageManager = storageManager,
@@ -116,14 +121,16 @@ class LinkForty private constructor() {
 
             this.eventTracker = EventTracker(
                 networkManager = networkManager,
-                storageManager = storageManager
+                storageManager = storageManager,
+                attributionContext = attributionContext
             )
 
             val handler = DeepLinkHandler()
             handler.configure(
                 networkManager = networkManager,
                 fingerprintCollector = fingerprintCollector,
-                baseURL = config.baseURL
+                baseURL = config.baseURL,
+                attributionContext = attributionContext
             )
             this.deepLinkHandler = handler
 
@@ -237,6 +244,23 @@ class LinkForty private constructor() {
     ) {
         if (!isInitialized) throw LinkFortyError.NotInitialized()
         eventTracker?.trackRevenue(amount, currency, properties)
+    }
+
+    /**
+     * Tracks a screen view for per-link screen-flow funnels.
+     *
+     * Emits a `screen_view` event stamped with the active last-click attribution
+     * context, so the dashboard can show which screens users reach after opening a
+     * deep link. Call from your screen's lifecycle (e.g., `onResume`) or a
+     * `NavController.OnDestinationChangedListener`.
+     *
+     * @param name Screen name (e.g., "ProductDetail")
+     * @param properties Optional additional properties
+     * @throws LinkFortyError if tracking fails
+     */
+    suspend fun trackScreenView(name: String, properties: Map<String, Any>? = null) {
+        if (!isInitialized) throw LinkFortyError.NotInitialized()
+        eventTracker?.trackScreenView(name, properties)
     }
 
     /**
@@ -367,6 +391,7 @@ class LinkForty private constructor() {
      */
     fun clearData() {
         attributionManager?.clearData()
+        attributionContext?.clear()
         eventTracker?.clearQueue()
         deepLinkHandler?.clearCallbacks()
         externalUserId = null
@@ -381,6 +406,7 @@ class LinkForty private constructor() {
         config = null
         networkManager = null
         attributionManager = null
+        attributionContext = null
         eventTracker = null
         deepLinkHandler = null
         externalUserId = null

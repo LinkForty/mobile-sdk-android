@@ -1,5 +1,6 @@
 package com.linkforty.sdk.fingerprint
 
+import com.linkforty.sdk.SdkInfo
 import com.squareup.moshi.JsonClass
 
 /**
@@ -43,5 +44,11 @@ data class DeviceFingerprint(
      * null values from JSON by default, so legacy/self-hosted servers
      * see the same wire format they always have.
      */
-    val appToken: String? = null
+    val appToken: String? = null,
+
+    /** SDK platform identifier (e.g., "android"), for backend SDK diagnostics */
+    val sdkName: String = SdkInfo.NAME,
+
+    /** SDK release version (e.g., "1.2.0"), for backend SDK diagnostics */
+    val sdkVersion: String = SdkInfo.VERSION
 )

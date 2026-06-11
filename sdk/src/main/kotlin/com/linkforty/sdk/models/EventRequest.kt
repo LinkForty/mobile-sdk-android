@@ -1,5 +1,6 @@
 package com.linkforty.sdk.models
 
+import com.linkforty.sdk.SdkInfo
 import com.squareup.moshi.FromJson
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.ToJson
@@ -20,7 +21,25 @@ data class EventRequest(
     val eventData: Map<String, @JvmSuppressWildcards Any>,
 
     /** ISO 8601 timestamp of when the event occurred */
-    val timestamp: String = Instant.now().toString()
+    val timestamp: String = Instant.now().toString(),
+
+    /** SDK platform identifier (e.g., "android"), for backend SDK diagnostics */
+    val sdkName: String = SdkInfo.NAME,
+
+    /** SDK release version (e.g., "1.2.0"), for backend SDK diagnostics */
+    val sdkVersion: String = SdkInfo.VERSION,
+
+    /** The deep link currently credited for this event (last-click); null if organic */
+    val attributedLinkId: String? = null,
+
+    /** The originating click id, when known */
+    val attributedClickId: String? = null,
+
+    /** ISO 8601 timestamp of when the attributing deep link opened the app */
+    val linkOpenedAt: String? = null,
+
+    /** The app-open session this event belongs to (for screen-flow grouping) */
+    val sessionId: String? = null
 )
 
 /**

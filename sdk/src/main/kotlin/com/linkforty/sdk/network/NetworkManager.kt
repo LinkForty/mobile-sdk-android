@@ -1,6 +1,7 @@
 package com.linkforty.sdk.network
 
 import com.linkforty.sdk.LinkFortyLogger
+import com.linkforty.sdk.SdkInfo
 import com.linkforty.sdk.errors.LinkFortyError
 import com.linkforty.sdk.models.AnyJsonAdapter
 import com.linkforty.sdk.models.LinkFortyConfig
@@ -126,6 +127,10 @@ internal class NetworkManager(
         // Build headers
         val requestHeaders = mutableMapOf<String, String>()
         requestHeaders["Content-Type"] = "application/json"
+
+        // Identify the SDK + version on every request (mirrors the sdkName/
+        // sdkVersion fields in the install/event payloads) for backend diagnostics.
+        requestHeaders["X-LinkForty-SDK"] = "${SdkInfo.NAME}/${SdkInfo.VERSION}"
 
         config.apiKey?.let { apiKey ->
             requestHeaders["Authorization"] = "Bearer $apiKey"

@@ -53,6 +53,8 @@ class MockStorageManager : StorageManagerProtocol {
     var mockInstallData: DeepLinkData? = null
     var mockIsFirstLaunch = true
 
+    var savedAttribution: String? = null
+
     override fun saveInstallId(installId: String) {
         savedInstallId = installId
     }
@@ -71,8 +73,19 @@ class MockStorageManager : StorageManagerProtocol {
         hasLaunchedCalled = true
     }
 
+    override fun saveAttribution(json: String) {
+        savedAttribution = json
+    }
+
+    override fun getAttribution(): String? = savedAttribution
+
+    override fun removeAttribution() {
+        savedAttribution = null
+    }
+
     override fun clearAll() {
         clearAllCalled = true
+        savedAttribution = null
     }
 }
 

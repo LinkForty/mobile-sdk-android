@@ -16,6 +16,9 @@ internal interface StorageManagerProtocol {
     fun getInstallData(): DeepLinkData?
     fun isFirstLaunch(): Boolean
     fun setHasLaunched()
+    fun saveAttribution(json: String)
+    fun getAttribution(): String?
+    fun removeAttribution()
     fun clearAll()
 }
 
@@ -73,6 +76,20 @@ internal class StorageManager(
         prefs.edit().putBoolean(StorageKeys.FIRST_LAUNCH, true).apply()
     }
 
+    // -- Attribution --
+
+    override fun saveAttribution(json: String) {
+        prefs.edit().putString(StorageKeys.ATTRIBUTION, json).apply()
+    }
+
+    override fun getAttribution(): String? {
+        return prefs.getString(StorageKeys.ATTRIBUTION, null)
+    }
+
+    override fun removeAttribution() {
+        prefs.edit().remove(StorageKeys.ATTRIBUTION).apply()
+    }
+
     // -- Clear Data --
 
     override fun clearAll() {
@@ -80,6 +97,7 @@ internal class StorageManager(
             .remove(StorageKeys.INSTALL_ID)
             .remove(StorageKeys.INSTALL_DATA)
             .remove(StorageKeys.FIRST_LAUNCH)
+            .remove(StorageKeys.ATTRIBUTION)
             .apply()
     }
 }

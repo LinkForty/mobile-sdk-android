@@ -1,6 +1,7 @@
 package com.linkforty.sdk.events
 
 import com.linkforty.sdk.LinkFortyLogger
+import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.errors.LinkFortyError
 import com.linkforty.sdk.models.EventRequest
 import com.linkforty.sdk.models.EventResponse
@@ -17,8 +18,12 @@ import java.time.Instant
 internal class EventTracker(
     private val networkManager: NetworkManagerProtocol,
     private val storageManager: StorageManagerProtocol,
+    private val attributionContext: AttributionContext,
     private val eventQueue: EventQueue = EventQueue()
 ) {
+
+    /** Last tracked screen name, for the `previousScreen` transition stamp. */
+    private var lastScreen: String? = null
 
     /**
      * Tracks a custom event.
@@ -37,12 +42,19 @@ internal class EventTracker(
         val installId = storageManager.getInstallId()
             ?: throw LinkFortyError.NotInitialized()
 
-        // Create event request
+        // Stamp the event with the active last-click attribution context so the
+        // backend can credit the deep link that drove it (organic events carry
+        // only the session id).
+        val stamp = attributionContext.getStamp()
         val event = EventRequest(
             installId = installId,
             eventName = name,
             eventData = properties ?: emptyMap(),
-            timestamp = Instant.now().toString()
+            timestamp = Instant.now().toString(),
+            attributedLinkId = stamp.attributedLinkId,
+            attributedClickId = stamp.attributedClickId,
+            linkOpenedAt = stamp.linkOpenedAt,
+            sessionId = stamp.sessionId
         )
 
         // Try to send immediately
@@ -82,6 +94,38 @@ internal class EventTracker(
         eventProperties["currency"] = currency
 
         trackEvent(name = "revenue", properties = eventProperties)
+    }
+
+    /**
+     * Tracks a screen view.
+     *
+     * Emits a `screen_view` event (through the normal pipeline, so it is stamped
+     * with the active last-click attribution context) carrying the screen name and
+     * — when available — the previously tracked screen, so the dashboard can build
+     * a per-link screen-flow funnel.
+     *
+     * @param name Screen name (e.g., "ProductDetail")
+     * @param properties Optional additional properties
+     * @throws LinkFortyError if tracking fails
+     */
+    suspend fun trackScreenView(name: String, properties: Map<String, Any>? = null) {
+        if (name.isBlank()) {
+            throw LinkFortyError.InvalidEventData("Screen name cannot be empty")
+        }
+
+        val previous = synchronized(this) {
+            val p = lastScreen
+            lastScreen = name
+            p
+        }
+
+        val eventProperties = (properties ?: emptyMap()).toMutableMap()
+        eventProperties["screen"] = name
+        if (previous != null && previous != name) {
+            eventProperties["previousScreen"] = previous
+        }
+
+        trackEvent(name = "screen_view", properties = eventProperties)
     }
 
     /**

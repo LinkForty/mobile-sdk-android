@@ -87,6 +87,19 @@ class NetworkManagerTest {
     }
 
     @Test
+    fun `request includes SDK identity header`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(200, """{"ok": true}""".toByteArray())
+
+        sut.request<TestOkResponse>(
+            endpoint = "/test",
+            method = HttpMethod.GET
+        )
+
+        val sdkHeader = mockHttpClient.lastHeaders?.get("X-LinkForty-SDK")
+        assertEquals("${com.linkforty.sdk.SdkInfo.NAME}/${com.linkforty.sdk.SdkInfo.VERSION}", sdkHeader)
+    }
+
+    @Test
     fun `request without API key has no auth header`() = runTest {
         val configNoKey = LinkFortyConfig(
             baseURL = "https://api.example.com",

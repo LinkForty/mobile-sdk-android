@@ -18,4 +18,7 @@ internal object StorageKeys {
 
     /** First launch flag key */
     const val FIRST_LAUNCH = "$PREFIX.firstLaunch"
+
+    /** Active last-click attribution context key (ActiveAttribution JSON) */
+    const val ATTRIBUTION = "$PREFIX.attribution"
 }

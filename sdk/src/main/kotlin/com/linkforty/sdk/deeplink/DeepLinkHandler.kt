@@ -5,6 +5,7 @@ import com.linkforty.sdk.LinkFortyLogger
 import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.fingerprint.FingerprintCollectorProtocol
 import com.linkforty.sdk.models.DeepLinkData
+import com.linkforty.sdk.models.mergingUrlParameters
 import com.linkforty.sdk.network.HttpMethod
 import com.linkforty.sdk.network.NetworkManagerProtocol
 import com.linkforty.sdk.network.request
@@ -222,7 +223,9 @@ internal class DeepLinkHandler {
                 method = HttpMethod.GET
             )
             LinkFortyLogger.log("Server-side resolution succeeded for $uri")
-            resolved
+            // The resolve returns the link's stored configuration; the
+            // parameters on the URL that was tapped are known only here.
+            resolved.mergingUrlParameters(fallback?.customParameters)
         } catch (e: Exception) {
             LinkFortyLogger.log("Server-side resolution failed, using local parse: ${e.message}")
             fallback

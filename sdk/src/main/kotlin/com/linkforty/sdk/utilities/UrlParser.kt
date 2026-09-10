@@ -48,11 +48,10 @@ internal object UrlParser {
      * @return Map of custom parameters, empty if none found
      */
     fun extractCustomParameters(uri: Uri): Map<String, String> {
-        val utmKeys = setOf("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content")
         val customParams = mutableMapOf<String, String>()
 
         uri.queryParameterNames?.forEach { name ->
-            if (name !in utmKeys) {
+            if (!isReservedParameter(name)) {
                 uri.getQueryParameter(name)?.let { value ->
                     customParams[name] = value
                 }
@@ -60,6 +59,22 @@ internal object UrlParser {
         }
 
         return customParams
+    }
+
+    /**
+     * Names LinkForty consumes, which are never a custom parameter:
+     *   utm_*    surfaced separately as utmParameters
+     *   fp_*     fingerprint signals the SDK appends when resolving a link, and
+     *            which the redirect reads server-side for attribution
+     *   lf_click the click id the redirect appends to a destination URL
+     *
+     * Mirrors the server's own filter so a direct open and a deferred install
+     * agree on what reaches the app. A tapped short link would not normally
+     * carry the last two, but the URL is public and anyone can append them.
+     */
+    fun isReservedParameter(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.startsWith("utm_") || lower.startsWith("fp_") || lower == "lf_click"
     }
 
     /**

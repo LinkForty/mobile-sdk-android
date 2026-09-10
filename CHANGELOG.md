@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.3.2] - 2026-09-09
 ### Fixed
 - `InstallResponse` no longer fails to decode when the backend returns `deepLinkData: {}` for an organic (unattributed) install, which surfaced as a `LinkFortyError.DecodingError` out of `initialize()`. An empty or otherwise unusable `deepLinkData` object is now treated as "no deep link" (`null`), the same as `null`.
 

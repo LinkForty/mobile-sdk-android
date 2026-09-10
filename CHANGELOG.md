@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+### Fixed
+- `InstallResponse` no longer fails to decode when the backend returns `deepLinkData: {}` for an organic (unattributed) install, which surfaced as a `LinkFortyError.DecodingError` out of `initialize()`. An empty or otherwise unusable `deepLinkData` object is now treated as "no deep link" (`null`), the same as `null`.
+
 ## [1.3.1] - 2026-09-09
 ### Fixed
 - URL parameters appended to a link are now delivered on a **direct open** (app already installed), not just after a deferred install. A link shared as `?slug=titanic` previously returned only the link's stored configuration on a direct open, because `resolveUrl` discarded the local parse of the tapped URL. `customParameters` now carries both, with URL values winning on a collision — the same precedence the server applies on the deferred path. `linkId`, `deepLinkPath`, `appScheme`, the store URLs and `utmParameters` remain server-provided ([#5](https://github.com/LinkForty/mobile-sdk-android/pull/5)).

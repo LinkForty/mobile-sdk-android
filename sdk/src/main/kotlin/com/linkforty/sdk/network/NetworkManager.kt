@@ -4,6 +4,7 @@ import com.linkforty.sdk.LinkFortyLogger
 import com.linkforty.sdk.SdkInfo
 import com.linkforty.sdk.errors.LinkFortyError
 import com.linkforty.sdk.models.AnyJsonAdapter
+import com.linkforty.sdk.models.LenientDeepLinkDataAdapter
 import com.linkforty.sdk.models.LinkFortyConfig
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.delay
@@ -42,6 +43,7 @@ internal class NetworkManager(
 
     private val moshi: Moshi = Moshi.Builder()
         .add(AnyJsonAdapter())
+        .add(LenientDeepLinkDataAdapter())
         .build()
 
     /** Maximum number of retry attempts */

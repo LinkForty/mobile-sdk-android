@@ -7,7 +7,9 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -55,6 +57,34 @@ class NetworkManagerTest {
         assertEquals("test-id", result.installId)
         assertTrue(result.attributed)
         assertEquals(85.0, result.confidenceScore)
+    }
+
+    /**
+     * The backend returns `deepLinkData: {}` for organic installs; decoding it
+     * must not fail the response.
+     */
+    @Test
+    fun `decodes organic install response with empty deepLinkData`() = runTest {
+        val responseJson = """
+            {
+                "installId": "test-id",
+                "attributed": false,
+                "confidenceScore": 0,
+                "matchedFactors": [],
+                "deepLinkData": {}
+            }
+        """.trimIndent()
+
+        mockHttpClient.mockResponse = HttpResponse(200, responseJson.toByteArray())
+
+        val result: InstallResponse = sut.request(
+            endpoint = "/test",
+            method = HttpMethod.POST
+        )
+
+        assertEquals("test-id", result.installId)
+        assertFalse(result.attributed)
+        assertNull(result.deepLinkData)
     }
 
     @Test

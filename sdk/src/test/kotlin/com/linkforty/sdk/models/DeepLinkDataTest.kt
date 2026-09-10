@@ -149,4 +149,54 @@ class DeepLinkDataTest {
         assertEquals(data1, data2)
         assert(data1 != data3)
     }
+
+    // Merging URL parameters on a direct open
+
+    @Test
+    fun `merge adds URL parameters when the link configures none`() {
+        val merged = DeepLinkData(shortCode = "abc123")
+            .mergingUrlParameters(mapOf("slug" to "titanic"))
+
+        assertEquals("titanic", merged.customParameters?.get("slug"))
+    }
+
+    @Test
+    fun `URL parameter overrides a configured one of the same name`() {
+        // Same precedence the server applies on the deferred path: what the
+        // sharer put on the URL is more specific than the link's stored setup.
+        val merged = DeepLinkData(
+            shortCode = "abc123",
+            customParameters = mapOf("slug" to "default", "keep" to "me")
+        ).mergingUrlParameters(mapOf("slug" to "titanic"))
+
+        assertEquals("titanic", merged.customParameters?.get("slug"))
+        assertEquals("me", merged.customParameters?.get("keep"))
+    }
+
+    @Test
+    fun `merge is a no-op when the URL carried nothing`() {
+        val resolved = DeepLinkData(shortCode = "abc123", customParameters = mapOf("a" to "1"))
+
+        assertEquals(resolved, resolved.mergingUrlParameters(null))
+        assertEquals(resolved, resolved.mergingUrlParameters(emptyMap()))
+    }
+
+    @Test
+    fun `merge never overwrites fields only the server knows`() {
+        val resolved = DeepLinkData(
+            shortCode = "abc123",
+            androidURL = "https://play.google.com/store/apps/details?id=com.app",
+            utmParameters = UTMParameters(source = "ig"),
+            deepLinkPath = "/product/1",
+            appScheme = "myapp",
+            linkId = "link-1"
+        )
+        val merged = resolved.mergingUrlParameters(mapOf("slug" to "titanic"))
+
+        assertEquals("link-1", merged.linkId)
+        assertEquals("/product/1", merged.deepLinkPath)
+        assertEquals("myapp", merged.appScheme)
+        assertEquals("https://play.google.com/store/apps/details?id=com.app", merged.androidURL)
+        assertEquals("ig", merged.utmParameters?.source)
+    }
 }

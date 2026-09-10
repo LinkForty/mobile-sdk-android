@@ -5,6 +5,7 @@ import com.linkforty.sdk.utilities.UrlParser
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -170,5 +171,35 @@ class UrlParserTest {
         val data = UrlParser.parseDeepLink(uri)
 
         assertNull(data?.customParameters)
+    }
+
+    // Reserved parameter names
+
+    @Test
+    fun `reserved names are the ones LinkForty consumes`() {
+        // utm_* is surfaced separately as utmParameters; fp_* are fingerprint
+        // signals the redirect reads server-side; lf_click is the id appended to
+        // a destination URL. None of them is the app's data, and the server's
+        // own extractor excludes all three.
+        assertTrue(UrlParser.isReservedParameter("utm_source"))
+        assertTrue(UrlParser.isReservedParameter("fp_tz"))
+        assertTrue(UrlParser.isReservedParameter("lf_click"))
+    }
+
+    @Test
+    fun `reserved names are matched case-insensitively`() {
+        assertTrue(UrlParser.isReservedParameter("UTM_Source"))
+        assertTrue(UrlParser.isReservedParameter("FP_TZ"))
+        assertTrue(UrlParser.isReservedParameter("LF_Click"))
+    }
+
+    @Test
+    fun `ordinary parameter names are not reserved`() {
+        assertFalse(UrlParser.isReservedParameter("slug"))
+        assertFalse(UrlParser.isReservedParameter("promo"))
+        // Near-misses must not be swept up.
+        assertFalse(UrlParser.isReservedParameter("utmost"))
+        assertFalse(UrlParser.isReservedParameter("fps"))
+        assertFalse(UrlParser.isReservedParameter("lf_clicks"))
     }
 }

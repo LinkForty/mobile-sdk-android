@@ -77,7 +77,13 @@ dependencies {
 // come from ~/.gradle/gradle.properties (mavenCentralUsername / mavenCentralPassword
 // / signingInMemoryKey / signingInMemoryKeyPassword) — never committed.
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    // automaticRelease = false: the upload lands in a Central Portal staging
+    // deployment for inspection and must be released by hand at
+    // https://central.sonatype.com/publishing/deployments. Maven Central is
+    // immutable — a published version can never be replaced, only superseded —
+    // so the staging step is the only chance to check the POM, the signatures
+    // and the artifact contents before they are permanent.
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = false)
     signAllPublications()
 
     configure(

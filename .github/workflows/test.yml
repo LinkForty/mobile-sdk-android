@@ -90,6 +90,11 @@ jobs:
       fail-fast: false
       matrix:
         api-level: [26, 30, 34, 35]
+        # API 26 hangs after resuming from a saved snapshot (the test task never
+        # finishes), so it cold-boots every run; the others resume from the cache.
+        include:
+          - api-level: 26
+            boot-options: -no-snapshot-load
     steps:
       - uses: actions/checkout@v4
 
@@ -130,13 +135,14 @@ jobs:
           script: echo "Generated AVD snapshot for caching."
 
       - name: Run instrumented tests
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: google_apis
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: ${{ matrix.boot-options }} -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: ./gradlew sdk:connectedDebugAndroidTest
 

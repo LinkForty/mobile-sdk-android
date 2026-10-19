@@ -90,8 +90,8 @@ jobs:
       fail-fast: false
       matrix:
         api-level: [26, 30, 34, 35]
-        # API 26 hangs after resuming from a saved snapshot (the test task never
-        # finishes), so it cold-boots every run; the others resume from the cache.
+        # API 26 doesn't finish the test task after resuming from a saved
+        # snapshot, so it cold-boots every run; the others resume from the cache.
         include:
           - api-level: 26
             boot-options: -no-snapshot-load
@@ -144,7 +144,11 @@ jobs:
           force-avd-creation: false
           emulator-options: ${{ matrix.boot-options }} -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew sdk:connectedDebugAndroidTest
+          # The cached AVD can hold the test APK from an earlier run, signed with
+          # that runner's debug key; installing over it fails on the signature.
+          script: |
+            adb uninstall com.linkforty.sdk.test || true
+            ./gradlew sdk:connectedDebugAndroidTest
 
       - name: Upload instrumented test results
         if: always()

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+### Fixed
+- The fingerprint reports the device language as `language` or `language-REGION` (`en-ES`, `zh-CN`, `es-419`), on the install request and as `fp_lang` on link resolves. `Locale.toLanguageTag()` also carries script, variant and Unicode extension subtags — `en-ES-u-fw-mon-mu-celsius` when the user sets a first day of week or temperature unit — which are now dropped, so the value matches what a browser reports for the same device.
+
 ## [1.3.2] - 2026-09-09
 ### Fixed
 - `InstallResponse` no longer fails to decode when the backend returns `deepLinkData: {}` for an organic (unattributed) install, which surfaced as a `LinkFortyError.DecodingError` out of `initialize()`. An empty or otherwise unusable `deepLinkData` object is now treated as "no deep link" (`null`), the same as `null`.

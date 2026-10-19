@@ -35,7 +35,7 @@ internal class FingerprintCollector(
         return DeviceFingerprint(
             userAgent = generateUserAgent(),
             timezone = TimeZone.getDefault().id,
-            language = Locale.getDefault().toLanguageTag(),
+            language = fingerprintLanguage(Locale.getDefault()),
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             platform = "Android",

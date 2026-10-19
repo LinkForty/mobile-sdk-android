@@ -15,6 +15,7 @@ android {
     defaultConfig {
         minSdk = 26
         consumerProguardFiles("consumer-rules.pro")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Expose the published version to runtime code so the SDK can report its
         // own version (sdkVersion / X-LinkForty-SDK). Sourced from VERSION_NAME in
@@ -69,6 +70,11 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+
+    // Instrumented tests (src/androidTest): run on an emulator in CI across API levels.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.okhttp.mockwebserver)
 }
 
 // Maven Central publishing via the Central Portal (central.sonatype.com).

@@ -90,6 +90,11 @@ jobs:
       fail-fast: false
       matrix:
         api-level: [26, 30, 34, 35]
+        # API 26 runs on a freshly created AVD every time: reusing a cached one,
+        # its instrumented test doesn't finish. The others use the AVD cache.
+        include:
+          - api-level: 26
+            fresh-avd: true
     steps:
       - uses: actions/checkout@v4
 
@@ -109,6 +114,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: AVD cache
+        if: ${{ !matrix.fresh-avd }}
         uses: actions/cache@v4
         id: avd-cache
         with:
@@ -130,6 +136,7 @@ jobs:
           script: echo "Generated AVD snapshot for caching."
 
       - name: Run instrumented tests
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
           api-level: ${{ matrix.api-level }}
@@ -138,7 +145,11 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew sdk:connectedDebugAndroidTest
+          # The cached AVD can hold the test APK from an earlier run, signed with
+          # that runner's debug key; installing over it fails on the signature.
+          script: |
+            adb uninstall com.linkforty.sdk.test || true
+            ./gradlew sdk:connectedDebugAndroidTest
 
       - name: Upload instrumented test results
         if: always()

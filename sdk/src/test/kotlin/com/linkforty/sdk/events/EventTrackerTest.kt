@@ -19,6 +19,11 @@ import java.math.BigDecimal
 
 class EventTrackerTest {
 
+    private companion object {
+        /** What the server's event endpoint returns. */
+        val ACKNOWLEDGED = """{"eventId": "evt-1", "acknowledged": true}""".toByteArray()
+    }
+
     private lateinit var mockHttpClient: MockHttpClient
     private lateinit var mockStorage: MockStorageManager
     private lateinit var networkManager: NetworkManager
@@ -46,7 +51,7 @@ class EventTrackerTest {
 
     @Test
     fun `trackEvent sends event to correct endpoint`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.trackEvent("purchase", mapOf("product_id" to "123"))
 
@@ -65,7 +70,7 @@ class EventTrackerTest {
 
     @Test
     fun `trackEvent stamps the active last-click attribution`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
         attributionContext.recordDeepLinkOpen("link-A", "click-1")
 
         sut.trackEvent("purchase")
@@ -78,7 +83,7 @@ class EventTrackerTest {
 
     @Test
     fun `organic event carries a session but no link`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.trackEvent("organic_event")
 
@@ -89,7 +94,7 @@ class EventTrackerTest {
 
     @Test
     fun `trackScreenView emits screen_view with screen and previousScreen`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.trackScreenView("Home")
         sut.trackScreenView("ProductDetail")
@@ -136,11 +141,48 @@ class EventTrackerTest {
         assertEquals(1, eventQueue.count)
     }
 
+    @Test
+    fun `trackEvent succeeds on the server's acknowledged response and queues nothing`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(200, ACKNOWLEDGED)
+
+        sut.trackEvent("purchase")
+
+        assertEquals(1, mockHttpClient.requestCount)
+        assertEquals(0, eventQueue.count)
+    }
+
+    @Test
+    fun `trackEvent refused with a 4xx is not queued`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(404, "Install not found".toByteArray())
+
+        assertThrows<LinkFortyError.InvalidResponse> {
+            sut.trackEvent("test")
+        }
+
+        assertEquals(0, eventQueue.count)
+    }
+
+    @Test
+    fun `a queued event is sent once by the next successful trackEvent`() = runTest {
+        mockHttpClient.mockError = java.io.IOException("offline")
+        assertThrows<LinkFortyError.NetworkError> { sut.trackEvent("offline_event") }
+        assertEquals(1, eventQueue.count)
+
+        mockHttpClient.mockError = null
+        mockHttpClient.mockResponse = HttpResponse(200, ACKNOWLEDGED)
+        val before = mockHttpClient.requestCount
+        sut.trackEvent("online_event")
+        sut.flushQueue()
+
+        assertEquals(2, mockHttpClient.requestCount - before)
+        assertEquals(0, eventQueue.count)
+    }
+
     // -- Track Revenue Tests --
 
     @Test
     fun `trackRevenue sends revenue event`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.trackRevenue(BigDecimal("29.99"), "USD")
 
@@ -156,7 +198,7 @@ class EventTrackerTest {
 
     @Test
     fun `trackRevenue includes amount and currency in properties`() = runTest {
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.trackRevenue(
             BigDecimal("9.99"),
@@ -201,12 +243,39 @@ class EventTrackerTest {
                 eventData = emptyMap()
             )
         )
-        mockHttpClient.mockResponse = HttpResponse(200, """{"success": true}""".toByteArray())
+        mockHttpClient.mockResponse = HttpResponse(200, """{"eventId": "evt-1", "acknowledged": true}""".toByteArray())
 
         sut.flushQueue()
 
         assertEquals(0, eventQueue.count)
     }
+
+    @Test
+    fun `flushQueue keeps a failed event at the head of the queue`() = runTest {
+        eventQueue.enqueue(event("first"))
+        eventQueue.enqueue(event("second"))
+        mockHttpClient.mockResponse = HttpResponse(503, "Unavailable".toByteArray())
+
+        sut.flushQueue()
+
+        assertEquals(listOf("first", "second"), eventQueue.peek().map { it.eventName })
+    }
+
+    @Test
+    fun `flushQueue drops an event the server refuses`() = runTest {
+        eventQueue.enqueue(event("refused"))
+        mockHttpClient.mockResponse = HttpResponse(400, "Bad request".toByteArray())
+
+        sut.flushQueue()
+
+        assertEquals(0, eventQueue.count)
+    }
+
+    private fun event(name: String) = com.linkforty.sdk.models.EventRequest(
+        installId = "id",
+        eventName = name,
+        eventData = emptyMap()
+    )
 
     private fun assertNotNull(value: Any?) {
         org.junit.jupiter.api.Assertions.assertNotNull(value)

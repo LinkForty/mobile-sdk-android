@@ -47,12 +47,20 @@ class LinkForty private constructor() {
         val shared: LinkForty
             get() = instance ?: throw LinkFortyError.NotInitialized()
 
+        /** Serializes [initialize] calls, so two at once can't both report the install. */
+        private val initMutex = Mutex()
+
         /**
          * Initializes the SDK with configuration and reports the install.
          *
+         * If reporting the install fails (for example, offline on the first
+         * launch), the SDK is left uninitialized and the call can be retried;
+         * register callbacks again after the retry succeeds.
+         *
          * @param context Android context (stored as applicationContext)
          * @param config SDK configuration
-         * @param attributionWindowHours Attribution window in hours (default: 168 = 7 days)
+         * @param attributionWindowHours Attribution window in hours; defaults to
+         *   [LinkFortyConfig.attributionWindowHours]
          * @param deviceId Optional device identifier for attribution
          * @return [InstallResponse] with attribution data
          * @throws LinkFortyError if initialization fails
@@ -60,11 +68,12 @@ class LinkForty private constructor() {
         suspend fun initialize(
             context: Context,
             config: LinkFortyConfig,
-            attributionWindowHours: Int = 168,
+            attributionWindowHours: Int? = null,
             deviceId: String? = null
-        ): InstallResponse {
+        ): InstallResponse = initMutex.withLock {
+            if (instance != null) throw LinkFortyError.AlreadyInitialized()
             val sdk = LinkForty()
-            return sdk.doInitialize(context, config, attributionWindowHours, deviceId)
+            sdk.doInitialize(context, config, attributionWindowHours ?: config.attributionWindowHours, deviceId)
         }
 
         /**
@@ -91,7 +100,6 @@ class LinkForty private constructor() {
     private var eventTracker: EventTracker? = null
     private var deepLinkHandler: DeepLinkHandler? = null
     private var externalUserId: String? = null
-    private val mutex = Mutex()
     private var isInitialized = false
 
     /** Whether this launch is the app's first, read before the install is reported. */
@@ -103,74 +111,73 @@ class LinkForty private constructor() {
         attributionWindowHours: Int,
         deviceId: String?
     ): InstallResponse {
-        mutex.withLock {
-            // Check if already initialized
-            if (instance != null) {
-                throw LinkFortyError.AlreadyInitialized()
-            }
+        // Validate configuration
+        config.validate()
 
-            // Validate configuration
-            config.validate()
+        val appContext = context.applicationContext
 
-            val appContext = context.applicationContext
+        // Store configuration
+        this.config = config
 
-            // Store configuration
-            this.config = config
+        // Set debug mode
+        LinkFortyLogger.isDebugEnabled = config.debug
 
-            // Set debug mode
-            LinkFortyLogger.isDebugEnabled = config.debug
+        // Create managers
+        val storageManager = StorageManager(appContext)
+        firstLaunchThisSession = storageManager.isFirstLaunch()
+        val networkManager = NetworkManager(config)
+        val fingerprintCollector = FingerprintCollector(appContext)
 
-            // Create managers
-            val storageManager = StorageManager(appContext)
-            firstLaunchThisSession = storageManager.isFirstLaunch()
-            val networkManager = NetworkManager(config)
-            val fingerprintCollector = FingerprintCollector(appContext)
+        this.networkManager = networkManager
 
-            this.networkManager = networkManager
+        val attributionContext = AttributionContext(storageManager, config.debug)
+        this.attributionContext = attributionContext
 
-            val attributionContext = AttributionContext(storageManager, config.debug)
-            this.attributionContext = attributionContext
+        this.attributionManager = AttributionManager(
+            networkManager = networkManager,
+            storageManager = storageManager,
+            fingerprintCollector = fingerprintCollector
+        )
 
-            this.attributionManager = AttributionManager(
-                networkManager = networkManager,
-                storageManager = storageManager,
-                fingerprintCollector = fingerprintCollector
-            )
+        this.eventTracker = EventTracker(
+            networkManager = networkManager,
+            storageManager = storageManager,
+            attributionContext = attributionContext
+        )
 
-            this.eventTracker = EventTracker(
-                networkManager = networkManager,
-                storageManager = storageManager,
-                attributionContext = attributionContext
-            )
+        val handler = DeepLinkHandler()
+        handler.configure(
+            networkManager = networkManager,
+            fingerprintCollector = fingerprintCollector,
+            baseURL = config.baseURL,
+            attributionContext = attributionContext
+        )
+        this.deepLinkHandler = handler
 
-            val handler = DeepLinkHandler()
-            handler.configure(
-                networkManager = networkManager,
-                fingerprintCollector = fingerprintCollector,
-                baseURL = config.baseURL,
-                attributionContext = attributionContext
-            )
-            this.deepLinkHandler = handler
-
-            // Mark as initialized
-            this.isInitialized = true
-            instance = this
-        }
+        // Mark as initialized
+        this.isInitialized = true
+        instance = this
 
         // Only the launch that reports the install delivers a deferred deep link;
         // later launches get the cached attribution without a callback.
         val isNewInstall = attributionManager!!.getInstallId() == null
 
-        // Report install and get attribution data (outside the lock)
-        val response = attributionManager!!.reportInstall(
-            attributionWindowHours = attributionWindowHours,
-            deviceId = deviceId,
-            appToken = config.appToken
-        )
+        // Report install and get attribution data
+        val response = try {
+            attributionManager!!.reportInstall(
+                attributionWindowHours = attributionWindowHours,
+                deviceId = deviceId,
+                appToken = config.appToken
+            )
+        } catch (e: Throwable) {
+            // Leave the SDK uninitialized so the app can call initialize() again.
+            reset()
+            throw e
+        }
 
-        // If attributed, notify deferred deep link handler
-        if (isNewInstall && response.attributed && response.deepLinkData != null) {
-            deepLinkHandler?.deliverDeferredDeepLink(response.deepLinkData)
+        // The deferred deep link, or null for an organic install
+        if (isNewInstall) {
+            deepLinkHandler?.deliverDeferredDeepLink(response.deepLinkData.takeIf { response.attributed })
         }
 
         LinkFortyLogger.log("SDK initialized successfully (attributed: ${response.attributed})")
@@ -354,15 +361,18 @@ class LinkForty private constructor() {
                 body = resolvedOptions
             )
 
-            // Construct URL from parts
-            val baseUrl = config.baseURL.trimEnd('/')
-            val templateSlug = resolvedOptions.templateSlug ?: ""
-            val pathSegment = if (templateSlug.isEmpty()) {
-                response.shortCode
-            } else {
-                "$templateSlug/${response.shortCode}"
+            // The server's short URL carries the link's own domain; servers that
+            // don't return one get it built from the base URL.
+            val url = response.shortUrl ?: run {
+                val baseUrl = config.baseURL.trimEnd('/')
+                val templateSlug = resolvedOptions.templateSlug ?: ""
+                val pathSegment = if (templateSlug.isEmpty()) {
+                    response.shortCode
+                } else {
+                    "$templateSlug/${response.shortCode}"
+                }
+                "$baseUrl/$pathSegment"
             }
-            val url = "$baseUrl/$pathSegment"
 
             CreateLinkResult(
                 url = url,
@@ -410,13 +420,15 @@ class LinkForty private constructor() {
     // -- Data Management --
 
     /**
-     * Clears all stored SDK data.
+     * Clears all stored SDK data: the install ID, install attribution, queued
+     * events and the last-click attribution context. The next launch reports a
+     * new install. Registered callbacks stay registered.
      */
     fun clearData() {
         attributionManager?.clearData()
         attributionContext?.clear()
         eventTracker?.clearQueue()
-        deepLinkHandler?.clearCallbacks()
+        deepLinkHandler?.clearDeferredDeepLink()
         externalUserId = null
         LinkFortyLogger.log("All SDK data cleared")
     }

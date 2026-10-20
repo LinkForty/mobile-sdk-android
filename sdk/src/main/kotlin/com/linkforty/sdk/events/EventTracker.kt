@@ -60,16 +60,19 @@ internal class EventTracker(
         // Try to send immediately
         try {
             sendEvent(event)
-            LinkFortyLogger.log("Event tracked: $name")
-
-            // If send succeeds, try to flush queue
-            flushQueue()
-        } catch (e: Exception) {
-            // If send fails, queue the event
-            eventQueue.enqueue(event)
-            LinkFortyLogger.log("Event queued due to error: $e")
+        } catch (e: LinkFortyError) {
+            // A failure the server may recover from is queued and sent on a later
+            // flush; one it won't (a 4xx) is only reported.
+            if (isRetryable(e)) {
+                eventQueue.enqueue(event)
+                LinkFortyLogger.log("Event queued due to error: $e")
+            }
             throw e
         }
+        LinkFortyLogger.log("Event tracked: $name")
+
+        // The connection works again: send what was queued.
+        flushQueue()
     }
 
     /**
@@ -139,11 +142,14 @@ internal class EventTracker(
             try {
                 sendEvent(event)
                 LinkFortyLogger.log("Queued event sent: ${event.eventName}")
-            } catch (e: Exception) {
-                // Re-queue if send fails
-                eventQueue.enqueue(event)
-                LinkFortyLogger.log("Failed to send queued event: $e")
-                return
+            } catch (e: LinkFortyError) {
+                if (isRetryable(e)) {
+                    // Keep its place and stop: the rest would fail the same way.
+                    eventQueue.requeueFirst(event)
+                    LinkFortyLogger.log("Failed to send queued event, keeping it queued: $e")
+                    return
+                }
+                LinkFortyLogger.log("Dropping queued event the server refused: $e")
             }
         }
     }
@@ -154,6 +160,13 @@ internal class EventTracker(
     /** Clears the event queue. */
     fun clearQueue() {
         eventQueue.clear()
+    }
+
+    /** Network failures and 5xx responses; a 4xx would be refused again. */
+    private fun isRetryable(error: LinkFortyError): Boolean = when (error) {
+        is LinkFortyError.NetworkError -> true
+        is LinkFortyError.InvalidResponse -> error.statusCode == null || error.statusCode >= 500
+        else -> false
     }
 
     private suspend fun sendEvent(event: EventRequest) {

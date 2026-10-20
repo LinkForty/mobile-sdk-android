@@ -13,7 +13,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 - **App Links**: Full support for Android App Links (verified HTTPS deep links)
 - **Custom URL Schemes**: Handle custom app URL schemes
 - **Event Tracking**: Track in-app events and conversions
-- **Revenue Tracking**: Dedicated revenue tracking with BigDecimal precision
+- **Revenue Tracking**: Dedicated revenue tracking with `BigDecimal` amounts
 - **Last-Click Attribution**: In-app events are automatically credited to the deep link that most recently opened the app
 - **Screen-Flow Tracking**: Report screen views (manually or automatically via a Jetpack Navigation listener) to see what users do after clicking a link
 - **Offline Support**: Queue events when offline with automatic retry (max 100 events)
@@ -33,7 +33,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 
 ```kotlin
 dependencies {
-    implementation("com.linkforty:sdk:1.1.0")
+    implementation("com.linkforty:sdk:1.3.3")
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.linkforty:sdk:1.1.0'
+    implementation 'com.linkforty:sdk:1.3.3'
 }
 ```
 
@@ -56,10 +56,14 @@ import com.linkforty.sdk.LinkForty
 import com.linkforty.sdk.models.LinkFortyConfig
 
 class MyApplication : Application() {
+    // Main.immediate starts initialize() right away, so `LinkForty.shared` is set
+    // before your first Activity handles its intent.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     override fun onCreate() {
         super.onCreate()
 
-        lifecycleScope.launch {
+        appScope.launch {
             try {
                 val config = LinkFortyConfig(
                     baseURL = "https://go.yourdomain.com",

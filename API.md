@@ -39,7 +39,7 @@ Initializes the SDK with configuration and reports the install.
 suspend fun initialize(
     context: Context,
     config: LinkFortyConfig,
-    attributionWindowHours: Int = 168,
+    attributionWindowHours: Int? = null,
     deviceId: String? = null
 ): InstallResponse
 ```
@@ -47,12 +47,12 @@ suspend fun initialize(
 **Parameters:**
 - `context`: Android Context (stored as `applicationContext`)
 - `config`: SDK configuration (required)
-- `attributionWindowHours`: Attribution window in hours (default: 168 = 7 days)
+- `attributionWindowHours`: Attribution window in hours (default: `config.attributionWindowHours`)
 - `deviceId`: Optional device identifier for attribution (e.g., GAID)
 
 **Returns:** `InstallResponse` with attribution data
 
-**Throws:** `LinkFortyError` if initialization fails
+**Throws:** `LinkFortyError` if initialization fails. If the install can't be reported (for example, offline on the first launch), the SDK is left uninitialized: call `initialize()` again, then register callbacks again.
 
 **Example:**
 ```kotlin
@@ -96,7 +96,7 @@ fun onDeferredDeepLink(callback: DeferredDeepLinkCallback)
 ```
 
 **Parameters:**
-- `callback`: Lambda invoked with deep link data (or null for organic installs)
+- `callback`: Lambda invoked with deep link data, or null for an organic install. It is called once, on the launch that reports the install; a callback registered after `initialize()` returns still receives it.
 
 **Example:**
 ```kotlin
@@ -313,7 +313,7 @@ fun isFirstLaunch(): Boolean
 
 #### clearData()
 
-Clears all stored SDK data.
+Clears all stored SDK data: the install ID, install attribution, queued events and the last-click attribution context. The next launch reports a new install. Registered callbacks stay registered.
 
 ```kotlin
 fun clearData()
@@ -547,7 +547,7 @@ navController.addOnDestinationChangedListener(LinkFortyNavObserver())
 
 ## Thread Safety
 
-All SDK methods are thread-safe. Callbacks are executed on the main thread. Internal state is protected by Kotlin `Mutex`.
+All SDK methods are thread-safe. Callbacks are executed on the main thread. Concurrent `initialize()` calls are serialized: one reports the install, the others throw `LinkFortyError.AlreadyInitialized`.
 
 ## Coroutines Support
 
@@ -563,7 +563,7 @@ lifecycleScope.launch {
 
 ## Offline Support
 
-Events are automatically queued when offline and sent when connectivity is restored. The queue has a maximum size of 100 events.
+An event that can't be sent (no connection, or a 5xx response) is queued in memory, up to 100 events, and sent with the next event that succeeds or by `flushEvents()`. An event the server refuses with a 4xx is not queued. The queue does not survive the app being killed.
 
 ---
 

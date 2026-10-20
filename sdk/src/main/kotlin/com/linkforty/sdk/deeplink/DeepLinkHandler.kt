@@ -166,6 +166,16 @@ internal class DeepLinkHandler {
     }
 
     /**
+     * Forgets the delivered deferred deep link, keeping registered callbacks.
+     */
+    fun clearDeferredDeepLink() {
+        synchronized(this) {
+            deferredDeepLinkDelivered = false
+            cachedDeferredDeepLink = null
+        }
+    }
+
+    /**
      * Clears all registered callbacks (for testing / reset).
      */
     fun clearCallbacks() {

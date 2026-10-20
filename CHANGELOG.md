@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The install is reported once per installation. `initialize()` previously reported an install on every launch, so each launch within the attribution window recorded a new install matched to the same click, and the deferred deep link was delivered again. Once an install ID is stored, `initialize()` now returns the cached attribution without a request, and `onDeferredDeepLink` fires only on the launch that reported the install. The attribution stays available from `getInstallData()` ([#9](https://github.com/LinkForty/mobile-sdk-android/pull/9)).
 - `LinkForty.isFirstLaunch(context)` can be called before `initialize()`; `LinkForty.shared.isFirstLaunch()` stays true for the whole first launch. It previously returned `true` before initialization whatever the stored state, and `false` as soon as `initialize()` had reported the install ([#9](https://github.com/LinkForty/mobile-sdk-android/pull/9)).
+- `trackEvent`, `trackRevenue` and `trackScreenView` succeed on the event endpoint's response, `{"eventId", "acknowledged"}`. They threw `DecodingError` on every call while the server stored the event, queued it, and sent it again on each flush, so events were stored more than once.
+- A failed event is queued only when it may succeed later (no connection, or a 5xx response). An event the server refuses with a 4xx is reported and not queued, and a queued event that fails again keeps its place at the head of the queue.
+- Connection failures and timeouts are retried with the same backoff as 5xx responses (3 attempts). Coroutine cancellation is passed through rather than reported as `NetworkError`.
+- If `initialize()` can't report the install, the SDK is left uninitialized and `initialize()` can be called again in the same session. Previously a retry threw `AlreadyInitialized` and events threw `NotInitialized` until the app restarted.
+- `initialize()` uses `LinkFortyConfig.attributionWindowHours` unless an `attributionWindowHours` argument is passed. It previously sent 168 hours whatever the config said.
+- Link parameters that are not strings (`42`, `true`, objects) reach the app as text in `customParameters` (`"42"`, `"true"`, JSON). Such a parameter previously dropped the whole deep link: an attributed install delivered no deferred deep link, and a direct open fell back to the local parse without `linkId` or `deepLinkPath`.
+- `clearData()` keeps the app's registered `onDeepLink` and `onDeferredDeepLink` callbacks, so deep links keep working after it.
+- `createLink()` with a `templateId` returns the short URL the server reports for the link, which carries the link's own domain, when the server provides one.
+- Concurrent `initialize()` calls are serialized, so only one reports the install.
+
+### Changed
+- An organic install calls `onDeferredDeepLink(null)` on the launch that reports the install, as documented. Code in an app's organic-install branch now runs; it is not called on later launches, or on installs reported before this version.
 
 ## [1.3.3] - 2026-10-19
 ### Fixed

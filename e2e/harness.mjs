@@ -144,9 +144,6 @@ class Context {
   async count(query) {
     return Number(this.sql(query));
   }
-  async hasColumn(table, column) {
-    return (await this.count(`SELECT count(*) FROM information_schema.columns WHERE table_name = ${this.q(table)} AND column_name = ${this.q(column)}`)) > 0;
-  }
   async installsSinceStart() {
     return this.count(`SELECT count(*) FROM install_events WHERE created_at BETWEEN ${this.q(this.startedAt)}::timestamp AND now() AT TIME ZONE 'utc' AND sdk_name = ${this.q(this.device.sdkName)}`);
   }

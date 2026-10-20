@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+## [1.3.3] - 2026-10-19
 ### Fixed
-- The fingerprint reports the device language as `language` or `language-REGION` (`en-ES`, `zh-CN`, `es-419`), on the install request and as `fp_lang` on link resolves. `Locale.toLanguageTag()` also carries script, variant and Unicode extension subtags — `en-ES-u-fw-mon-mu-celsius` when the user sets a first day of week or temperature unit — which are now dropped, so the value matches what a browser reports for the same device.
+- The fingerprint reports the device language as `language` or `language-REGION` (`en-ES`, `zh-CN`, `es-419`), on the install request and as `fp_lang` on link resolves. `Locale.toLanguageTag()` also carries script, variant and Unicode extension subtags — `en-ES-u-fw-mon-mu-celsius` when the user sets a first day of week or temperature unit — which are now dropped, so the value matches what a browser reports for the same device ([#6](https://github.com/LinkForty/mobile-sdk-android/pull/6)).
 
 ## [1.3.2] - 2026-09-09
 ### Fixed

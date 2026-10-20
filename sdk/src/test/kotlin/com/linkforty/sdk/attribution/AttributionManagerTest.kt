@@ -142,6 +142,32 @@ class AttributionManagerTest {
     }
 
     @Test
+    fun `reportInstall with a stored install ID returns cached attribution without a request`() = runTest {
+        mockStorage.mockInstallId = "stored-install-id"
+        mockStorage.mockInstallData = DeepLinkData(shortCode = "abc123")
+
+        val response = sut.reportInstall(attributionWindowHours = 168)
+
+        assertEquals(0, mockNetwork.requestCount)
+        assertEquals("stored-install-id", response.installId)
+        assertTrue(response.attributed)
+        assertEquals("abc123", response.deepLinkData?.shortCode)
+        assertNull(mockStorage.savedInstallId)
+    }
+
+    @Test
+    fun `reportInstall with a stored install ID and no attribution returns organic`() = runTest {
+        mockStorage.mockInstallId = "stored-install-id"
+
+        val response = sut.reportInstall(attributionWindowHours = 168)
+
+        assertEquals(0, mockNetwork.requestCount)
+        assertEquals("stored-install-id", response.installId)
+        assertFalse(response.attributed)
+        assertNull(response.deepLinkData)
+    }
+
+    @Test
     fun `reportInstall sends to correct endpoint`() = runTest {
         mockNetwork.mockResponse = InstallResponse(
             installId = "id",

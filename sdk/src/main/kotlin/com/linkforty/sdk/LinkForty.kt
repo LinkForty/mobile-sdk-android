@@ -66,6 +66,20 @@ class LinkForty private constructor() {
             val sdk = LinkForty()
             return sdk.doInitialize(context, config, attributionWindowHours, deviceId)
         }
+
+        /**
+         * Returns whether this is the app's first launch since installation.
+         *
+         * Usable before [initialize]. Once the SDK is initialized it returns the
+         * value read at the start of this launch, so it stays true for the whole
+         * first launch.
+         *
+         * @param context Android context
+         */
+        fun isFirstLaunch(context: Context): Boolean {
+            instance?.let { return it.isFirstLaunch() }
+            return StorageManager(context.applicationContext).isFirstLaunch()
+        }
     }
 
     // -- Internal state --
@@ -79,6 +93,9 @@ class LinkForty private constructor() {
     private var externalUserId: String? = null
     private val mutex = Mutex()
     private var isInitialized = false
+
+    /** Whether this launch is the app's first, read before the install is reported. */
+    private var firstLaunchThisSession = true
 
     private suspend fun doInitialize(
         context: Context,
@@ -105,6 +122,7 @@ class LinkForty private constructor() {
 
             // Create managers
             val storageManager = StorageManager(appContext)
+            firstLaunchThisSession = storageManager.isFirstLaunch()
             val networkManager = NetworkManager(config)
             val fingerprintCollector = FingerprintCollector(appContext)
 
@@ -139,6 +157,10 @@ class LinkForty private constructor() {
             instance = this
         }
 
+        // Only the launch that reports the install delivers a deferred deep link;
+        // later launches get the cached attribution without a callback.
+        val isNewInstall = attributionManager!!.getInstallId() == null
+
         // Report install and get attribution data (outside the lock)
         val response = attributionManager!!.reportInstall(
             attributionWindowHours = attributionWindowHours,
@@ -147,7 +169,7 @@ class LinkForty private constructor() {
         )
 
         // If attributed, notify deferred deep link handler
-        if (response.attributed && response.deepLinkData != null) {
+        if (isNewInstall && response.attributed && response.deepLinkData != null) {
             deepLinkHandler?.deliverDeferredDeepLink(response.deepLinkData)
         }
 
@@ -377,12 +399,13 @@ class LinkForty private constructor() {
     }
 
     /**
-     * Returns whether this is the first launch.
+     * Returns whether this is the app's first launch since installation.
+     *
+     * Read once at the start of [initialize], before the install is reported, so
+     * it stays true for the whole first launch. To check before initializing, use
+     * [LinkForty.isFirstLaunch] with a context.
      */
-    fun isFirstLaunch(): Boolean {
-        if (!isInitialized) return true
-        return attributionManager?.isFirstLaunch() ?: true
-    }
+    fun isFirstLaunch(): Boolean = firstLaunchThisSession
 
     // -- Data Management --
 

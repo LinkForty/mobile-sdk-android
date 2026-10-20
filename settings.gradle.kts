@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "linkforty-sdk-android"
 include(":sdk")
+include(":e2e-app")

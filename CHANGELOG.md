@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+## [1.6.0] - 2026-10-21
 ### Added
-- With an `appToken`, every request carries `X-LinkForty-App-Token`, so the server answers with the app's own workspace's links only.
-- With an `appToken`, the SDK learns the workspace's link domains: `initialize()` fetches them from `GET /api/sdk/v1/link-domains` in the background and stores them on the device, used from then on. A stored list is used at once on later launches.
-- `handleDeepLink(uri)` returns `true` when it looks the URI up as a LinkForty link and `false` otherwise.
+- With an `appToken`, every request carries `X-LinkForty-App-Token`, so a server on `@linkforty/core` 1.37.0 or later answers with the app's own workspace's links only ([#16](https://github.com/LinkForty/mobile-sdk-android/pull/16)).
+- With an `appToken`, the SDK learns the workspace's link domains: `initialize()` fetches them from `GET /api/sdk/v1/link-domains` in the background and stores them on the device, used from then on. A stored list is used at once on later launches ([#16](https://github.com/LinkForty/mobile-sdk-android/pull/16)).
+- `handleDeepLink(uri)` returns `true` when it looks the URI up as a LinkForty link and `false` otherwise ([#16](https://github.com/LinkForty/mobile-sdk-android/pull/16)).
 
 ### Changed
-- **Behavior change:** `handleDeepLink` looks up only LinkForty links: a web URI on one of the workspace's link domains or on the `baseURL` host, or any web URI while the domains are unknown. A custom-scheme URI, and a web URI on another host once the domains are known, make no request; `onDeepLink` receives the URI's own parameters, as it did when a lookup failed. Every URI was looked up before, so an app's own URLs could match another link's short code. `handleDeepLink`'s return type changed from `Unit` to `Boolean`; Kotlin and Java callers compile unchanged, and a library compiled against 1.5.x that calls it must be recompiled.
+- **Behavior change:** `handleDeepLink` looks up only LinkForty links: a web URI on one of the workspace's link domains or on the `baseURL` host, or any web URI while the domains are unknown. A custom-scheme URI, and a web URI on another host once the domains are known, make no request; `onDeepLink` receives the URI's own parameters, as it did when a lookup failed. Every URI was looked up before, so an app's own URLs could match another link's short code. `handleDeepLink`'s return type changed from `Unit` to `Boolean`; Kotlin and Java callers compile unchanged, and a library compiled against 1.5.x that calls it must be recompiled ([#16](https://github.com/LinkForty/mobile-sdk-android/pull/16)).
 
 ## [1.5.0] - 2026-10-21
 ### Added

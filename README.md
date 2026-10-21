@@ -33,7 +33,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 
 ```kotlin
 dependencies {
-    implementation("com.linkforty:sdk:1.4.0")
+    implementation("com.linkforty:sdk:1.5.0")
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.linkforty:sdk:1.4.0'
+    implementation 'com.linkforty:sdk:1.5.0'
 }
 ```
 

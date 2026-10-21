@@ -141,6 +141,9 @@ internal class NetworkManager(
         // sdkVersion fields in the install/event payloads) for backend diagnostics.
         requestHeaders["X-LinkForty-SDK"] = "${SdkInfo.NAME}/${SdkInfo.VERSION}"
 
+        // Names the app's workspace, so the server answers with its links only.
+        config.appToken?.let { requestHeaders["X-LinkForty-App-Token"] = it }
+
         config.apiKey?.let { apiKey ->
             requestHeaders["Authorization"] = "Bearer $apiKey"
         }

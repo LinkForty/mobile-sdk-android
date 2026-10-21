@@ -51,9 +51,13 @@ class DeepLinkServerResolutionTest {
 
     private fun mockUri(
         pathSegments: List<String> = emptyList(),
-        queryParams: Map<String, String?> = emptyMap()
+        queryParams: Map<String, String?> = emptyMap(),
+        scheme: String = "https",
+        host: String = "go.example.com"
     ): Uri {
         val uri = mockk<Uri>()
+        every { uri.scheme } returns scheme
+        every { uri.host } returns host
         every { uri.pathSegments } returns pathSegments
         every { uri.queryParameterNames } returns queryParams.keys
         every { uri.getQueryParameter(any()) } returns null

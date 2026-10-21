@@ -50,6 +50,9 @@ internal class DeepLinkHandler {
     /** Last-click attribution context updated on each deep-link open */
     private var attributionContext: AttributionContext? = null
 
+    /** The workspace's link hosts, which decide what is looked up */
+    private var linkDomains: LinkDomains? = null
+
     /** Flag to track if deferred deep link has been delivered */
     private var deferredDeepLinkDelivered = false
 
@@ -63,12 +66,14 @@ internal class DeepLinkHandler {
         networkManager: NetworkManagerProtocol,
         fingerprintCollector: FingerprintCollectorProtocol,
         baseURL: String,
-        attributionContext: AttributionContext? = null
+        attributionContext: AttributionContext? = null,
+        linkDomains: LinkDomains? = null
     ) {
         this.networkManager = networkManager
         this.fingerprintCollector = fingerprintCollector
         this.baseURL = baseURL
         this.attributionContext = attributionContext
+        this.linkDomains = linkDomains
     }
 
     // -- Deferred Deep Link (Install Attribution) --
@@ -129,17 +134,23 @@ internal class DeepLinkHandler {
     }
 
     /**
-     * Handles a deep link URI with server-side resolution.
+     * Handles a deep link URI. A LinkForty link (see [LinkDomains]) is resolved
+     * on the server; any other URL is parsed locally, with no request. Either
+     * way the result reaches the [onDeepLink] callbacks.
+     *
+     * @return whether the URL is looked up as a LinkForty link
      */
-    fun handleDeepLink(uri: Uri) {
+    fun handleDeepLink(uri: Uri): Boolean {
+        val lookUp = linkDomains?.isLinkFortyUrl(uri)
+            ?: LinkDomains.isLinkFortyUrl(uri.scheme, uri.host, baseURL?.let(LinkDomains::hostOf), null)
         scope.launch {
             LinkFortyLogger.log("Handling deep link: $uri")
 
             // Parse locally first as fallback
             val localData = UrlParser.parseDeepLink(uri)
 
-            // Attempt server-side resolution if configured
-            val resolvedData = if (networkManager != null && fingerprintCollector != null) {
+            // Look a LinkForty link up on the server, when configured
+            val resolvedData = if (lookUp && networkManager != null && fingerprintCollector != null) {
                 resolveUrl(uri, fallback = localData)
             } else {
                 localData
@@ -163,6 +174,7 @@ internal class DeepLinkHandler {
                 callbacks.forEach { it(uri, resolvedData) }
             }
         }
+        return lookUp
     }
 
     /**

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+### Added
+- With an `appToken`, every request carries `X-LinkForty-App-Token`, so the server answers with the app's own workspace's links only.
+- With an `appToken`, the SDK learns the workspace's link domains: `initialize()` fetches them from `GET /api/sdk/v1/link-domains` in the background and stores them on the device, used from then on. A stored list is used at once on later launches.
+- `handleDeepLink(uri)` returns `true` when it looks the URI up as a LinkForty link and `false` otherwise.
+
+### Changed
+- **Behavior change:** `handleDeepLink` looks up only LinkForty links: a web URI on one of the workspace's link domains or on the `baseURL` host, or any web URI while the domains are unknown. A custom-scheme URI, and a web URI on another host once the domains are known, make no request; `onDeepLink` receives the URI's own parameters, as it did when a lookup failed. Every URI was looked up before, so an app's own URLs could match another link's short code. `handleDeepLink`'s return type changed from `Unit` to `Boolean`; Kotlin and Java callers compile unchanged, and a library compiled against 1.5.x that calls it must be recompiled.
 
 ## [1.5.0] - 2026-10-21
 ### Added

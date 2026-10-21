@@ -19,6 +19,9 @@ internal interface StorageManagerProtocol {
     fun saveAttribution(json: String)
     fun getAttribution(): String?
     fun removeAttribution()
+    fun saveLinkDomains(hosts: String)
+    fun getLinkDomains(): String?
+    fun removeLinkDomains()
     fun saveEventQueue(json: String)
     fun getEventQueue(): String?
     fun removeEventQueue()
@@ -91,6 +94,20 @@ internal class StorageManager(
 
     override fun removeAttribution() {
         prefs.edit().remove(StorageKeys.ATTRIBUTION).apply()
+    }
+
+    // -- Link Domains --
+
+    override fun saveLinkDomains(hosts: String) {
+        prefs.edit().putString(StorageKeys.LINK_DOMAINS, hosts).apply()
+    }
+
+    override fun getLinkDomains(): String? {
+        return prefs.getString(StorageKeys.LINK_DOMAINS, null)
+    }
+
+    override fun removeLinkDomains() {
+        prefs.edit().remove(StorageKeys.LINK_DOMAINS).apply()
     }
 
     // -- Event Queue --

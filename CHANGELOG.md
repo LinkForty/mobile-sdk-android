@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+## [1.5.0] - 2026-10-21
 ### Added
-- Every event carries a `clientEventId`, generated when it is tracked and kept through every retry, so a server that recognizes it stores an event it receives twice only once; a server that doesn't ignores it.
-- The event queue is stored on the device. Each event is stored before it is sent and removed once the server has it, so events not yet sent survive the app being closed. `clearData()` and `clearEventQueue()` clear the stored queue.
-- Queued events are sent when `initialize()` completes and when the app returns to the foreground, as well as after the next event that sends and on `flushEvents()`. No permission is added: the foreground is detected from activity lifecycle callbacks, and the network connection is not watched.
+- Every event carries a `clientEventId`, generated when it is tracked and kept through every retry, so a server on `@linkforty/core` 1.36.0 or later stores an event it receives twice only once; an older server ignores it ([#14](https://github.com/LinkForty/mobile-sdk-android/pull/14)).
+- The event queue is stored on the device. Each event is stored before it is sent and removed once the server has it, so events not yet sent survive the app being closed. `clearData()` and `clearEventQueue()` clear the stored queue ([#14](https://github.com/LinkForty/mobile-sdk-android/pull/14)).
+- Queued events are sent when `initialize()` completes and when the app returns to the foreground, as well as after the next event that sends and on `flushEvents()`. No permission is added: the foreground is detected from activity lifecycle callbacks, and the network connection is not watched ([#14](https://github.com/LinkForty/mobile-sdk-android/pull/14)).
 
 ### Changed
-- **Behavior change:** `trackEvent`, `trackRevenue` and `trackScreenView` return normally when the event can't be sent now (no connection, or a 5xx response) and is queued. They threw `NetworkError` or `InvalidResponse` while queueing the event. They still throw for invalid input, when the SDK is not initialized, and when the server rejects the event (a 4xx).
+- **Behavior change:** `trackEvent`, `trackRevenue` and `trackScreenView` return normally when the event can't be sent now (no connection, or a 5xx response) and is queued. They threw `NetworkError` or `InvalidResponse` while queueing the event. They still throw for invalid input, when the SDK is not initialized, and when the server rejects the event (a 4xx) ([#14](https://github.com/LinkForty/mobile-sdk-android/pull/14)).
 
 ## [1.4.0] - 2026-10-20
 ### Fixed

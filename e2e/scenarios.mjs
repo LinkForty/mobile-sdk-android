@@ -19,6 +19,8 @@ export const scenarios = [
       await t.click(link);
       await t.dbCheck('the browser click is recorded', async () =>
         (await t.count(`SELECT count(*) FROM click_events WHERE link_id = ${t.q(link.id)}`)) >= 1);
+      await t.dbCheck('the browser click counts as human', async () => (await t.botClicks(link)) === 0,
+        async () => `${await t.botClicks(link)} stored as bot`);
 
       const first = await t.launch();
       const init = first.one('initResult');
@@ -100,6 +102,9 @@ export const scenarios = [
       t.check('stored parameters arrive', data?.customParameters?.productId === '9');
       t.check('parameters on the tapped URL arrive', data?.customParameters?.campaign === 'spring');
       t.check('the callback runs on the main thread', opened[0]?.thread === 'main', opened[0]?.thread);
+      await t.dbCheck('the open is stored as one human click', async () => (await t.humanClicks(link)) === 1
+        && (await t.botClicks(link)) === 0,
+      async () => `${await t.humanClicks(link)} human, ${await t.botClicks(link)} bot`);
     },
   },
 
@@ -113,6 +118,9 @@ export const scenarios = [
       const opened = entries.all('deepLink');
       t.check('onDeepLink fires once', opened.length === 1, `fired ${opened.length} times`);
       t.check('with the link', opened[0]?.deepLinkData?.shortCode === link.shortCode);
+      await t.dbCheck('the open is stored as one human click', async () => (await t.humanClicks(link)) === 1
+        && (await t.botClicks(link)) === 0,
+      async () => `${await t.humanClicks(link)} human, ${await t.botClicks(link)} bot`);
     },
   },
 

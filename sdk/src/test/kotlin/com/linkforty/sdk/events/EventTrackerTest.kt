@@ -129,14 +129,19 @@ class EventTrackerTest {
     }
 
     @Test
-    fun `trackEvent queues on network failure`() = runTest {
+    fun `trackEvent queues on a server error and returns normally`() = runTest {
         mockHttpClient.mockResponse = HttpResponse(500, "Error".toByteArray())
 
-        try {
-            sut.trackEvent("test")
-        } catch (_: Exception) {
-            // Expected
-        }
+        sut.trackEvent("test")
+
+        assertEquals(1, eventQueue.count)
+    }
+
+    @Test
+    fun `trackEvent queues when offline and returns normally`() = runTest {
+        mockHttpClient.mockError = java.io.IOException("offline")
+
+        sut.trackEvent("test")
 
         assertEquals(1, eventQueue.count)
     }
@@ -165,7 +170,7 @@ class EventTrackerTest {
     @Test
     fun `a queued event is sent once by the next successful trackEvent`() = runTest {
         mockHttpClient.mockError = java.io.IOException("offline")
-        assertThrows<LinkFortyError.NetworkError> { sut.trackEvent("offline_event") }
+        sut.trackEvent("offline_event")
         assertEquals(1, eventQueue.count)
 
         mockHttpClient.mockError = null

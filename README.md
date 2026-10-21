@@ -16,7 +16,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 - **Revenue Tracking**: Dedicated revenue tracking with `BigDecimal` amounts
 - **Last-Click Attribution**: In-app events are automatically credited to the deep link that most recently opened the app
 - **Screen-Flow Tracking**: Report screen views (manually or automatically via a Jetpack Navigation listener) to see what users do after clicking a link
-- **Offline Support**: Queue events when offline with automatic retry (max 100 events)
+- **Offline Support**: Events are stored on the device until the server has them (max 100), and sent on the next launch, when the app returns to the foreground, or after the next event that sends
 - **Programmatic Link Creation**: Create short links directly from your app
 - **Privacy-First**: No GAID collection by default
 - **Kotlin-Native**: 100% Kotlin, modern coroutines API
@@ -256,6 +256,8 @@ LinkForty.shared.getInstallId()?.let { id ->
 ```
 
 ### Event Queue Management
+
+`trackEvent` stores each event on the device and returns once it is sent or queued; an event that can't be sent now is sent later without your app doing anything. These calls are for inspecting or controlling the queue.
 
 ```kotlin
 // Check queued events count

@@ -1,13 +1,18 @@
 package com.linkforty.sdk
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.attribution.AttributionManager
 import com.linkforty.sdk.deeplink.DeepLinkCallback
 import com.linkforty.sdk.deeplink.DeepLinkHandler
 import com.linkforty.sdk.deeplink.DeferredDeepLinkCallback
 import com.linkforty.sdk.errors.LinkFortyError
+import com.linkforty.sdk.events.EventQueue
+import com.linkforty.sdk.events.EventQueueStore
 import com.linkforty.sdk.events.EventTracker
 import com.linkforty.sdk.fingerprint.FingerprintCollector
 import com.linkforty.sdk.models.CreateLinkOptions
@@ -19,6 +24,10 @@ import com.linkforty.sdk.models.LinkFortyConfig
 import com.linkforty.sdk.network.HttpMethod
 import com.linkforty.sdk.network.NetworkManager
 import com.linkforty.sdk.storage.StorageManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
@@ -119,6 +128,12 @@ class LinkForty private constructor() {
     /** Whether this launch is the app's first, read before the install is reported. */
     private var firstLaunchThisSession = true
 
+    /** Runs queued-event flushes the app didn't ask for (after initialize, on foreground). */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Whether the foreground observer is registered; once per process. */
+    private var foregroundObserverRegistered = false
+
     private suspend fun doInitialize(
         context: Context,
         config: LinkFortyConfig,
@@ -156,7 +171,8 @@ class LinkForty private constructor() {
         this.eventTracker = EventTracker(
             networkManager = networkManager,
             storageManager = storageManager,
-            attributionContext = attributionContext
+            attributionContext = attributionContext,
+            eventQueue = EventQueue(EventQueueStore(storageManager))
         )
 
         val handler = deepLinkHandler
@@ -198,7 +214,50 @@ class LinkForty private constructor() {
 
         LinkFortyLogger.log("SDK initialized successfully (attributed: ${response.attributed})")
 
+        // Events queued before this launch, or before the install was reported, go out now.
+        flushQueuedEventsInBackground()
+        observeForeground(appContext)
+
         return response
+    }
+
+    private fun flushQueuedEventsInBackground() {
+        val tracker = eventTracker ?: return
+        if (tracker.queuedEventCount == 0) return
+        backgroundScope.launch {
+            runCatching { tracker.flushQueue() }
+                .onFailure { LinkFortyLogger.log("Background event flush failed: $it") }
+        }
+    }
+
+    /**
+     * Sends queued events each time the app returns to the foreground, counted
+     * from activities started and stopped. Needs no permission.
+     */
+    private fun observeForeground(context: Context) {
+        val application = context as? Application ?: return
+        synchronized(lock) {
+            if (foregroundObserverRegistered) return
+            foregroundObserverRegistered = true
+        }
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            private var started = 0
+
+            override fun onActivityStarted(activity: Activity) {
+                started++
+                if (started == 1 && isInitialized) flushQueuedEventsInBackground()
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                if (started > 0) started--
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
     }
 
     // -- Deep Linking --
@@ -271,9 +330,16 @@ class LinkForty private constructor() {
     /**
      * Tracks a custom event.
      *
+     * The event is stored on the device and sent. If it can't be sent now (no
+     * connection, or a 5xx response), it stays queued and the call returns
+     * normally; the queue survives the app being closed and is sent on the next
+     * launch, when the app returns to the foreground, or after the next event
+     * that sends. A retried event is stored once by the server.
+     *
      * @param name Event name (e.g., "purchase", "signup")
      * @param properties Optional event properties (must be JSON-serializable)
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError for an empty name, when not initialized, or when the
+     *   server rejects the event (a 4xx); a rejected event is not queued
      */
     suspend fun trackEvent(name: String, properties: Map<String, Any>? = null) {
         if (!isInitialized) throw LinkFortyError.NotInitialized()
@@ -286,7 +352,7 @@ class LinkForty private constructor() {
      * @param amount Revenue amount (must be non-negative)
      * @param currency Currency code (e.g., "USD")
      * @param properties Optional additional properties
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError as [trackEvent] does, or for a negative amount
      */
     suspend fun trackRevenue(
         amount: BigDecimal,
@@ -307,7 +373,7 @@ class LinkForty private constructor() {
      *
      * @param name Screen name (e.g., "ProductDetail")
      * @param properties Optional additional properties
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError as [trackEvent] does
      */
     suspend fun trackScreenView(name: String, properties: Map<String, Any>? = null) {
         if (!isInitialized) throw LinkFortyError.NotInitialized()

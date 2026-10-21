@@ -5,6 +5,7 @@ import com.squareup.moshi.FromJson
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.ToJson
 import java.time.Instant
+import java.util.UUID
 
 /**
  * Request payload for tracking events.
@@ -39,7 +40,14 @@ data class EventRequest(
     val linkOpenedAt: String? = null,
 
     /** The app-open session this event belongs to (for screen-flow grouping) */
-    val sessionId: String? = null
+    val sessionId: String? = null,
+
+    /**
+     * Identifies this event across retries. Generated once when the event is
+     * tracked and kept while it is queued, so the server stores a retried event
+     * once.
+     */
+    val clientEventId: String = UUID.randomUUID().toString()
 )
 
 /**

@@ -83,9 +83,22 @@ class MockStorageManager : StorageManagerProtocol {
         savedAttribution = null
     }
 
+    var savedEventQueue: String? = null
+
+    override fun saveEventQueue(json: String) {
+        savedEventQueue = json
+    }
+
+    override fun getEventQueue(): String? = savedEventQueue
+
+    override fun removeEventQueue() {
+        savedEventQueue = null
+    }
+
     override fun clearAll() {
         clearAllCalled = true
         savedAttribution = null
+        savedEventQueue = null
     }
 }
 

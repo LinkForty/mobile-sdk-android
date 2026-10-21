@@ -19,6 +19,9 @@ internal interface StorageManagerProtocol {
     fun saveAttribution(json: String)
     fun getAttribution(): String?
     fun removeAttribution()
+    fun saveEventQueue(json: String)
+    fun getEventQueue(): String?
+    fun removeEventQueue()
     fun clearAll()
 }
 
@@ -90,6 +93,20 @@ internal class StorageManager(
         prefs.edit().remove(StorageKeys.ATTRIBUTION).apply()
     }
 
+    // -- Event Queue --
+
+    override fun saveEventQueue(json: String) {
+        prefs.edit().putString(StorageKeys.EVENT_QUEUE, json).apply()
+    }
+
+    override fun getEventQueue(): String? {
+        return prefs.getString(StorageKeys.EVENT_QUEUE, null)
+    }
+
+    override fun removeEventQueue() {
+        prefs.edit().remove(StorageKeys.EVENT_QUEUE).apply()
+    }
+
     // -- Clear Data --
 
     override fun clearAll() {
@@ -98,6 +115,7 @@ internal class StorageManager(
             .remove(StorageKeys.INSTALL_DATA)
             .remove(StorageKeys.FIRST_LAUNCH)
             .remove(StorageKeys.ATTRIBUTION)
+            .remove(StorageKeys.EVENT_QUEUE)
             .apply()
     }
 }

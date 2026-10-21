@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-21
+### Added
+- `InstallResponse.attributionMethod` (`"fingerprint"` or `"none"`) and `InstallResponse.competingLinks`, from a server on `@linkforty/core` that sends them. `competingLinks` is how many other links had a click from the install's network that also reached the confidence threshold: above 0, a tap on another device on the same network may be what led to this install, so an app acting on a sensitive link can treat the match as unverified. Both are null from a server that does not send them, and on launches after the first, which return the stored attribution.
+- `DeepLinkData.confidenceScore`, `matchedFactors`, `attributionMethod` and `competingLinks`, set on the deferred deep link and stored with it, so `getInstallData()` returns them on later launches. They are null on a direct open, and in install data stored by an earlier SDK version.
+
+### Changed
+- `DeepLinkData` and `InstallResponse` have `@JvmOverloads` constructors with the new parameters at the end, so Kotlin and Java callers compile unchanged and Java code compiled against 1.6.x keeps working. Kotlin code compiled against 1.6.x that constructs either class with default arguments, or calls `copy()`, must be recompiled.
+
 ## [1.6.0] - 2026-10-21
 ### Added
 - With an `appToken`, every request carries `X-LinkForty-App-Token`, so a server on `@linkforty/core` 1.37.0 or later answers with the app's own workspace's links only ([#16](https://github.com/LinkForty/mobile-sdk-android/pull/16)).

@@ -125,6 +125,83 @@ class InstallResponseTest {
         assertNotNull(response.deepLinkData?.clickedAtDate())
     }
 
+    // -- Match Certainty --
+
+    @Test
+    fun `decodes attributionMethod and competingLinks on a match`() {
+        val json = """
+            {
+                "installId": "install-123",
+                "attributed": true,
+                "confidenceScore": 85,
+                "matchedFactors": ["userAgent", "timezone"],
+                "attributionMethod": "fingerprint",
+                "competingLinks": 2,
+                "deepLinkData": {
+                    "shortCode": "abc123",
+                    "confidenceScore": 85,
+                    "matchedFactors": ["userAgent", "timezone"],
+                    "attributionMethod": "fingerprint",
+                    "competingLinks": 2
+                }
+            }
+        """.trimIndent()
+
+        val response = adapter.fromJson(json)!!
+
+        assertEquals("fingerprint", response.attributionMethod)
+        assertEquals(2, response.competingLinks)
+        val deepLink = response.deepLinkData!!
+        assertEquals(85.0, deepLink.confidenceScore)
+        assertEquals(listOf("userAgent", "timezone"), deepLink.matchedFactors)
+        assertEquals("fingerprint", deepLink.attributionMethod)
+        assertEquals(2, deepLink.competingLinks)
+    }
+
+    @Test
+    fun `decodes an organic response with attributionMethod none`() {
+        val json = """
+            {
+                "installId": "install-123",
+                "attributed": false,
+                "confidenceScore": 0,
+                "matchedFactors": [],
+                "attributionMethod": "none",
+                "competingLinks": 0,
+                "deepLinkData": {}
+            }
+        """.trimIndent()
+
+        val response = adapter.fromJson(json)!!
+
+        assertEquals("none", response.attributionMethod)
+        assertEquals(0, response.competingLinks)
+        assertNull(response.deepLinkData)
+    }
+
+    @Test
+    fun `decodes a response without attributionMethod or competingLinks as null`() {
+        val json = """
+            {
+                "installId": "install-123",
+                "attributed": true,
+                "confidenceScore": 85,
+                "matchedFactors": ["userAgent"],
+                "deepLinkData": {"shortCode": "abc123"}
+            }
+        """.trimIndent()
+
+        val response = adapter.fromJson(json)!!
+
+        assertNull(response.attributionMethod)
+        assertNull(response.competingLinks)
+        val deepLink = response.deepLinkData!!
+        assertNull(deepLink.confidenceScore)
+        assertNull(deepLink.matchedFactors)
+        assertNull(deepLink.attributionMethod)
+        assertNull(deepLink.competingLinks)
+    }
+
     // -- Required Fields --
 
     @Test

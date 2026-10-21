@@ -68,7 +68,13 @@ data class DeepLinkData(
     /** Custom URI scheme (e.g., "myapp") */
     val appScheme: String? = null,
     val clickedAt: String? = null,
-    val linkId: String? = null
+    val linkId: String? = null,
+    // Set on the deferred deep link only; null on a direct open:
+    val confidenceScore: Double? = null,      // match confidence (0-100)
+    val matchedFactors: List<String>? = null,
+    val attributionMethod: String? = null,    // "fingerprint"
+    /** Other links whose click from the install's network also reached the confidence threshold. Above 0, another device's tap may be what led to this install: treat a sensitive link (sign-in, gift) as unverified, e.g. ask the user to confirm. */
+    val competingLinks: Int? = null
 ) {
     /** Parse clickedAt as an Instant */
     fun clickedAtDate(): Instant?
@@ -86,10 +92,14 @@ data class InstallResponse(
     val installId: String,
     val attributed: Boolean,
     /** Attribution confidence score (0-100) */
-    val confidenceScore: Int,
+    val confidenceScore: Double,
     /** Matched fingerprint factors (e.g., ["ip", "user_agent", "timezone"]) */
     val matchedFactors: List<String>,
-    val deepLinkData: DeepLinkData?
+    val deepLinkData: DeepLinkData? = null,
+    /** "fingerprint" when matched to a click, "none" when organic; null from an older server and on launches after the first */
+    val attributionMethod: String? = null,
+    /** Other links in contention for the install (0 when none, and when organic); null from an older server and on launches after the first */
+    val competingLinks: Int? = null
 )
 
 data class CreateLinkOptions(

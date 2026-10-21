@@ -391,7 +391,13 @@ val deepLinkPath: String?         // Deep link path for in-app routing
 val appScheme: String?            // App URI scheme
 val clickedAt: String?            // ISO 8601 click timestamp
 val linkId: String?               // Link UUID from the backend
+val confidenceScore: Double?      // Match confidence (0-100); deferred deep links only
+val matchedFactors: List<String>? // Matched fingerprint factors; deferred deep links only
+val attributionMethod: String?    // "fingerprint"; deferred deep links only
+val competingLinks: Int?          // Other links in contention for the install; deferred deep links only
 ```
+
+The last four are set on the deferred deep link (`onDeferredDeepLink`, `getInstallData()`) and are null on a direct open. See [`competingLinks`](#competinglinks) under `InstallResponse`.
 
 ### Methods
 
@@ -417,7 +423,15 @@ val attributed: Boolean           // Whether install was attributed
 val confidenceScore: Double       // Confidence score (0-100)
 val matchedFactors: List<String>  // Matched fingerprint factors
 val deepLinkData: DeepLinkData?   // Deep link data if attributed
+val attributionMethod: String?    // "fingerprint" when matched to a click, "none" when organic
+val competingLinks: Int?          // Other links in contention for the install
 ```
+
+`attributionMethod` and `competingLinks` are null when the server does not send them, and on launches after the first, when `initialize()` returns the attribution stored on the device.
+
+#### competingLinks
+
+How many other links had a click from the install's network that also reached the confidence threshold. 0 means nothing else was in contention (and is always 0 for an organic install). Above 0, a tap on another device on the same network may be what led to this install, so an app acting on a sensitive link, such as a sign-in or a gift, can treat the match as unverified and, for example, ask the user to confirm.
 
 ---
 

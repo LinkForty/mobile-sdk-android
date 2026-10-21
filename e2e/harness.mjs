@@ -144,6 +144,14 @@ class Context {
   async count(query) {
     return Number(this.sql(query));
   }
+  /** Clicks the server stored for a link, split by its bot classification. */
+  async humanClicks(link) {
+    return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)} AND NOT is_bot`);
+  }
+  async botClicks(link) {
+    return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)} AND is_bot`);
+  }
+
   async installsSinceStart() {
     return this.count(`SELECT count(*) FROM install_events WHERE created_at BETWEEN ${this.q(this.startedAt)}::timestamp AND now() AT TIME ZONE 'utc' AND sdk_name = ${this.q(this.device.sdkName)}`);
   }

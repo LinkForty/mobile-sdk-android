@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+### Fixed
+- The install is reported once per installation. `initialize()` previously reported an install on every launch, so each launch within the attribution window recorded a new install matched to the same click, and the deferred deep link was delivered again. Once an install ID is stored, `initialize()` now returns the cached attribution without a request, and `onDeferredDeepLink` fires only on the launch that reported the install. The attribution stays available from `getInstallData()` ([#9](https://github.com/LinkForty/mobile-sdk-android/pull/9)).
+- `LinkForty.isFirstLaunch(context)` can be called before `initialize()`; `LinkForty.shared.isFirstLaunch()` stays true for the whole first launch. It previously returned `true` before initialization whatever the stored state, and `false` as soon as `initialize()` had reported the install ([#9](https://github.com/LinkForty/mobile-sdk-android/pull/9)).
 
 ## [1.3.3] - 2026-10-19
 ### Fixed

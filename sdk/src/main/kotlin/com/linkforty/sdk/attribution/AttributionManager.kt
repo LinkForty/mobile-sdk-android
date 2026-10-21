@@ -20,6 +20,10 @@ internal class AttributionManager(
     /**
      * Reports an install to the backend and retrieves attribution data.
      *
+     * The install is reported once per installation. When an install ID is
+     * already stored, the cached attribution is returned without a request, so
+     * a later launch never records a second install or matches the click again.
+     *
      * @param attributionWindowHours Attribution window in hours
      * @param deviceId Optional device ID (GAID) if user consented
      * @param appToken Optional public workspace token (Cloud organic-install scoping)
@@ -31,6 +35,18 @@ internal class AttributionManager(
         deviceId: String? = null,
         appToken: String? = null
     ): InstallResponse {
+        storageManager.getInstallId()?.let { storedInstallId ->
+            val cachedData = storageManager.getInstallData()
+            LinkFortyLogger.log("Install already reported (installId: $storedInstallId); using cached attribution")
+            return InstallResponse(
+                installId = storedInstallId,
+                attributed = cachedData != null,
+                confidenceScore = if (cachedData != null) 100.0 else 0.0,
+                matchedFactors = emptyList(),
+                deepLinkData = cachedData
+            )
+        }
+
         // Collect device fingerprint
         val fingerprint = fingerprintCollector.collectFingerprint(
             attributionWindowHours = attributionWindowHours,

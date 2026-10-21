@@ -99,6 +99,8 @@ class Harness(private val context: Context) {
         log("launch", mapOf("extras" to JSONObject(extras), "order" to order))
         log("isFirstLaunchBeforeInit", mapOf("value" to LinkForty.isFirstLaunch(context)))
 
+        if (order == "before") registerCallbacks()
+
         scope.launch {
             if (order == "concurrent") {
                 val first = async { initialize("first") }
@@ -106,11 +108,6 @@ class Harness(private val context: Context) {
                 first.await()
                 second.await()
             } else {
-                if (order == "before") {
-                    // `LinkForty.shared` throws until `initialize` is called, so this
-                    // is the closest an app can come to registering first.
-                    registerCallbacks()
-                }
                 initialize("only")
             }
             if (order != "before") registerCallbacks()

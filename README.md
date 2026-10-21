@@ -33,7 +33,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 
 ```kotlin
 dependencies {
-    implementation("com.linkforty:sdk:1.6.0")
+    implementation("com.linkforty:sdk:1.7.0")
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.linkforty:sdk:1.6.0'
+    implementation 'com.linkforty:sdk:1.7.0'
 }
 ```
 
@@ -100,6 +100,16 @@ LinkForty.shared.onDeferredDeepLink { deepLinkData ->
     } else {
         // Organic install - no attribution
         Log.d("LinkForty", "Organic install")
+    }
+}
+```
+
+The deferred deep link also carries how certain the match is: `confidenceScore`, `matchedFactors`, `attributionMethod` and `competingLinks`. `competingLinks` counts the other links that had a click from the install's network that also reached the confidence threshold; above 0, a tap on another device on the same network may be what led to this install. An app acting on a sensitive link, such as a sign-in or a gift, can treat that match as unverified:
+
+```kotlin
+LinkForty.shared.onDeferredDeepLink { deepLinkData ->
+    if (deepLinkData != null && (deepLinkData.competingLinks ?: 0) > 0) {
+        askUserToConfirm(deepLinkData) // e.g. "Did you open a gift link?"
     }
 }
 ```

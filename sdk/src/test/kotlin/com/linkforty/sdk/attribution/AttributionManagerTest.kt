@@ -153,6 +153,9 @@ class AttributionManagerTest {
         assertTrue(response.attributed)
         assertEquals("abc123", response.deepLinkData?.shortCode)
         assertNull(mockStorage.savedInstallId)
+        // Not known for a cached attribution; only the launch that reported the install has them.
+        assertNull(response.attributionMethod)
+        assertNull(response.competingLinks)
     }
 
     @Test

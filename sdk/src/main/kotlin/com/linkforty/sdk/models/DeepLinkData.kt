@@ -17,7 +17,7 @@ import java.time.format.DateTimeParseException
  * Deep link data returned from attribution or direct deep links.
  */
 @JsonClass(generateAdapter = true)
-data class DeepLinkData(
+data class DeepLinkData @JvmOverloads constructor(
     /** The short code of the link (e.g., "abc123") */
     val shortCode: String,
 
@@ -46,7 +46,35 @@ data class DeepLinkData(
     val clickedAt: String? = null,
 
     /** The link ID from the backend */
-    val linkId: String? = null
+    val linkId: String? = null,
+
+    /**
+     * Confidence score (0-100) of the match between the install and the click.
+     * Set on a deferred deep link; null on a direct open.
+     */
+    val confidenceScore: Double? = null,
+
+    /**
+     * Which fingerprint factors matched the click. Set on a deferred deep link;
+     * null on a direct open.
+     */
+    val matchedFactors: List<String>? = null,
+
+    /**
+     * How the install was matched to the click (`"fingerprint"`). Set on a
+     * deferred deep link; null on a direct open.
+     */
+    val attributionMethod: String? = null,
+
+    /**
+     * How many other links had a click from the install's network that also
+     * reached the confidence threshold. Above 0, a tap on another device on the
+     * same network may be what led to this install, so an app acting on a
+     * sensitive link (a sign-in or a gift) can treat the match as unverified,
+     * for example by asking the user to confirm. Set on a deferred deep link;
+     * null on a direct open.
+     */
+    val competingLinks: Int? = null
 ) {
     /**
      * Parses [clickedAt] as an [Instant], or null if absent or unparseable.

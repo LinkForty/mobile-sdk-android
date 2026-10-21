@@ -141,6 +141,42 @@ class DeepLinkDataTest {
     }
 
     @Test
+    fun `match certainty fields are null by default`() {
+        val data = DeepLinkData(shortCode = "abc123")
+
+        assertNull(data.confidenceScore)
+        assertNull(data.matchedFactors)
+        assertNull(data.attributionMethod)
+        assertNull(data.competingLinks)
+    }
+
+    @Test
+    fun `JSON round-trip preserves match certainty fields`() {
+        val original = DeepLinkData(
+            shortCode = "match",
+            deepLinkPath = "/gift/1",
+            confidenceScore = 85.0,
+            matchedFactors = listOf("userAgent", "timezone"),
+            attributionMethod = "fingerprint",
+            competingLinks = 1
+        )
+
+        val decoded = adapter.fromJson(adapter.toJson(original))
+
+        assertEquals(original, decoded)
+    }
+
+    /** Install data stored by an earlier SDK version has none of the match certainty fields. */
+    @Test
+    fun `decodes stored JSON without match certainty fields`() {
+        val json = """{"shortCode":"abc123","deepLinkPath":"/product/123","linkId":"uuid-123"}"""
+
+        val data = adapter.fromJson(json)
+
+        assertEquals(DeepLinkData(shortCode = "abc123", deepLinkPath = "/product/123", linkId = "uuid-123"), data)
+    }
+
+    @Test
     fun `data class equality works`() {
         val data1 = DeepLinkData(shortCode = "abc", linkId = "123")
         val data2 = DeepLinkData(shortCode = "abc", linkId = "123")

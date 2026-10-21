@@ -12,6 +12,8 @@ export function readEnv() {
     apiKey: process.env.LF_E2E_API_KEY,
     appToken: process.env.LF_E2E_APP_TOKEN,
     organicAppToken: process.env.LF_E2E_ORGANIC_APP_TOKEN,
+    // A second workspace's API key, for links the app's workspace doesn't own.
+    otherApiKey: process.env.LF_E2E_OTHER_API_KEY,
     templateId: process.env.LF_E2E_TEMPLATE_ID,
     templateSlug: process.env.LF_E2E_TEMPLATE_SLUG,
     databaseURL: process.env.LF_E2E_DATABASE_URL,
@@ -117,6 +119,13 @@ class Server {
     return { id: body.id, shortCode, clickUrl: url, appUrl: url };
   }
 
+  /** A link in the workspace of LF_E2E_OTHER_API_KEY, not the app's. */
+  async createOtherWorkspaceLink(fields) {
+    const other = new Server({ ...this.env, apiKey: this.env.otherApiKey, templateId: undefined, templateSlug: undefined });
+    await other.discoverTemplate();
+    return other.createLink(fields);
+  }
+
   async resolve(shortCode) {
     if (!shortCode) return null;
     const path = this.env.templateSlug ? `${this.env.templateSlug}/${shortCode}` : shortCode;
@@ -161,6 +170,9 @@ class Context {
   /** Clicks the server stored for a link, split by its bot classification. */
   async humanClicks(link) {
     return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)} AND NOT is_bot`);
+  }
+  async clicks(link) {
+    return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)}`);
   }
   async botClicks(link) {
     return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)} AND is_bot`);

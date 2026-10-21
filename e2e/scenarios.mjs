@@ -102,6 +102,8 @@ export const scenarios = [
       t.check('stored parameters arrive', data?.customParameters?.productId === '9');
       t.check('parameters on the tapped URL arrive', data?.customParameters?.campaign === 'spring');
       t.check('the callback runs on the main thread', opened[0]?.thread === 'main', opened[0]?.thread);
+      t.check('handleDeepLink reports a LinkForty link', entries.one('handleResult')?.handled === true,
+        String(entries.one('handleResult')?.handled));
       await t.dbCheck('the open is stored as one human click', async () => (await t.humanClicks(link)) === 1
         && (await t.botClicks(link)) === 0,
       async () => `${await t.humanClicks(link)} human, ${await t.botClicks(link)} bot`);
@@ -121,6 +123,57 @@ export const scenarios = [
       await t.dbCheck('the open is stored as one human click', async () => (await t.humanClicks(link)) === 1
         && (await t.botClicks(link)) === 0,
       async () => `${await t.humanClicks(link)} human, ${await t.botClicks(link)} bot`);
+    },
+  },
+
+  {
+    name: 'A URL on a host that is not a LinkForty link host is not looked up',
+    async run(t) {
+      const link = await t.link({ deepLinkParameters: { productId: '21' } });
+      await t.fresh();
+      await t.launch();
+      const path = new URL(link.appUrl).pathname;
+      const entries = await t.command('handle', { url: `https://example.com${path}` }, 'deepLink');
+      t.check('handleDeepLink reports it is not a LinkForty link', entries.one('handleResult')?.handled === false,
+        String(entries.one('handleResult')?.handled));
+      t.check('onDeepLink still receives it', entries.all('deepLink').length === 1);
+      t.check('without server data', entries.one('deepLink')?.deepLinkData?.linkId == null,
+        JSON.stringify(entries.one('deepLink')?.deepLinkData));
+      await t.dbCheck('no lookup reached the server', async () => (await t.clicks(link)) === 0,
+        async () => `${await t.clicks(link)} clicks recorded`);
+    },
+  },
+
+  {
+    name: 'A custom-scheme URL is not looked up',
+    async run(t) {
+      const link = await t.link({ deepLinkParameters: { productId: '22' } });
+      await t.fresh();
+      await t.launch();
+      const path = new URL(link.appUrl).pathname;
+      const entries = await t.command('handle', { url: `lfe2e://open${path}` }, 'deepLink');
+      t.check('handleDeepLink reports it is not a LinkForty link', entries.one('handleResult')?.handled === false,
+        String(entries.one('handleResult')?.handled));
+      t.check('onDeepLink still receives it', entries.all('deepLink').length === 1);
+      await t.dbCheck('no lookup reached the server', async () => (await t.clicks(link)) === 0,
+        async () => `${await t.clicks(link)} clicks recorded`);
+    },
+  },
+
+  {
+    name: "Another workspace's link is not resolved for this app",
+    needs: ['otherApiKey', 'appToken'],
+    async run(t) {
+      const other = await t.server.createOtherWorkspaceLink({ deepLinkParameters: { secret: 'other-workspace' } });
+      await t.fresh();
+      await t.launch();
+      const entries = await t.command('handle', { url: `${t.env.deviceBaseURL}/${other.shortCode}` }, 'deepLink');
+      const data = entries.one('deepLink')?.deepLinkData;
+      t.check('onDeepLink receives it without the other workspace\'s data',
+        entries.all('deepLink').length === 1 && data?.linkId == null && data?.customParameters?.secret == null,
+        JSON.stringify(data));
+      await t.dbCheck('no click is recorded on the other workspace\'s link', async () => (await t.clicks(other)) === 0,
+        async () => `${await t.clicks(other)} clicks recorded`);
     },
   },
 

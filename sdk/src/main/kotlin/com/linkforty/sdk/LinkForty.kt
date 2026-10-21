@@ -10,6 +10,7 @@ import com.linkforty.sdk.attribution.AttributionManager
 import com.linkforty.sdk.deeplink.DeepLinkCallback
 import com.linkforty.sdk.deeplink.DeepLinkHandler
 import com.linkforty.sdk.deeplink.DeferredDeepLinkCallback
+import com.linkforty.sdk.deeplink.LinkDomains
 import com.linkforty.sdk.errors.LinkFortyError
 import com.linkforty.sdk.events.EventQueue
 import com.linkforty.sdk.events.EventQueueStore
@@ -53,6 +54,9 @@ class LinkForty private constructor() {
          */
         @JvmStatic
         val shared: LinkForty = LinkForty()
+
+        /** How long a held link waits for the first link-domain fetch on a launch with no stored list. */
+        private const val HELD_LINK_DOMAIN_WAIT_MS = 3_000L
 
         /** Serializes [initialize] calls, so two at once can't both report the install. */
         private val initMutex = Mutex()
@@ -175,12 +179,22 @@ class LinkForty private constructor() {
             eventQueue = EventQueue(EventQueueStore(storageManager))
         )
 
+        // The workspace's link hosts: the stored list now, a fresh one from the
+        // server in the background (it needs the app token).
+        val linkDomains = LinkDomains(storageManager, config.baseURL)
+        if (config.appToken != null) {
+            backgroundScope.launch { linkDomains.refresh(networkManager) }
+        } else {
+            linkDomains.skipFetch()
+        }
+
         val handler = deepLinkHandler
         handler.configure(
             networkManager = networkManager,
             fingerprintCollector = fingerprintCollector,
             baseURL = config.baseURL,
-            attributionContext = attributionContext
+            attributionContext = attributionContext,
+            linkDomains = linkDomains
         )
 
         // Mark as initialized and resolve links that arrived before now
@@ -188,7 +202,18 @@ class LinkForty private constructor() {
             isInitialized = true
             pendingDeepLinks.toList().also { pendingDeepLinks.clear() }
         }
-        pending.forEach { handler.handleDeepLink(it) }
+        if (pending.isNotEmpty()) {
+            if (linkDomains.known != null) {
+                pending.forEach { handler.handleDeepLink(it) }
+            } else {
+                // No stored list yet: give the fetch a moment, so a held link is
+                // decided against the workspace's domains when they arrive quickly.
+                backgroundScope.launch {
+                    linkDomains.awaitFetch(HELD_LINK_DOMAIN_WAIT_MS)
+                    pending.forEach { handler.handleDeepLink(it) }
+                }
+            }
+        }
 
         // Only the launch that reports the install delivers a deferred deep link;
         // later launches get the cached attribution without a callback.
@@ -263,14 +288,24 @@ class LinkForty private constructor() {
     // -- Deep Linking --
 
     /**
-     * Handles a deep link URI (App Link or custom scheme).
+     * Handles a URI that opened the app (App Link or custom scheme). Pass every
+     * URI: the SDK decides which are LinkForty links.
      *
-     * A link handed over before [initialize], as when it launches the app, is
-     * held and resolved once [initialize] has configured the SDK.
+     * A web (http/https) URI on one of the workspace's link domains, or on the
+     * base URL's host, is looked up on the server. With an app token, the SDK
+     * learns the workspace's link domains; until it knows them, every web URI is
+     * looked up. Any other URI, including custom schemes, makes no request.
+     * Either way [onDeepLink] callbacks receive the result: the link's data, or
+     * the URI's own parameters.
+     *
+     * A URI handed over before [initialize], as when it launches the app, is
+     * held and decided once [initialize] has configured the SDK.
      *
      * @param uri Deep link URI to handle
+     * @return true if the URI is looked up as a LinkForty link; for a held URI,
+     *   true for a web URI
      */
-    fun handleDeepLink(uri: Uri) {
+    fun handleDeepLink(uri: Uri): Boolean {
         val handler = synchronized(lock) {
             if (!isInitialized) {
                 pendingDeepLinks.add(uri)
@@ -281,9 +316,10 @@ class LinkForty private constructor() {
         }
         if (handler == null) {
             LinkFortyLogger.log("Deep link held until initialize(): $uri")
-            return
+            val scheme = uri.scheme?.lowercase()
+            return scheme == "http" || scheme == "https"
         }
-        handler.handleDeepLink(uri)
+        return handler.handleDeepLink(uri)
     }
 
     /**

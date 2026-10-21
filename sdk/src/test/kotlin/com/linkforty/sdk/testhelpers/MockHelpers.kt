@@ -83,6 +83,18 @@ class MockStorageManager : StorageManagerProtocol {
         savedAttribution = null
     }
 
+    var savedLinkDomains: String? = null
+
+    override fun saveLinkDomains(hosts: String) {
+        savedLinkDomains = hosts
+    }
+
+    override fun getLinkDomains(): String? = savedLinkDomains
+
+    override fun removeLinkDomains() {
+        savedLinkDomains = null
+    }
+
     var savedEventQueue: String? = null
 
     override fun saveEventQueue(json: String) {

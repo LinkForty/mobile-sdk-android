@@ -156,7 +156,9 @@ LinkForty.shared.onDeepLink { uri, deepLinkData ->
 
 A link handed to `handleDeepLink` before `initialize()` has finished, as when it launches the app, is held and delivered once it has.
 
-> **Server-side resolution:** When the SDK is initialized, deep links are automatically resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. If the server is unreachable, the SDK falls back to local URL parsing.
+Pass every URI that opens the app. `handleDeepLink` returns `true` for a LinkForty link, which it looks up on the server, and `false` for anything else, which it doesn't: a custom-scheme URI, or, once the SDK knows your workspace's link domains (it learns them with an `appToken`), a web URI on another host. `onDeepLink` receives both, the second with the URI's own parameters.
+
+> **Server-side resolution:** When the SDK is initialized, LinkForty links are resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. If the server is unreachable, the SDK falls back to local URL parsing, as it does for a URI that isn't a LinkForty link.
 
 ### 4. Track Events
 

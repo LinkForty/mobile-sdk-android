@@ -22,6 +22,9 @@ internal object StorageKeys {
     /** Active last-click attribution context key (ActiveAttribution JSON) */
     const val ATTRIBUTION = "$PREFIX.attribution"
 
+    /** The workspace's link hosts, one per line */
+    const val LINK_DOMAINS = "$PREFIX.linkDomains"
+
     /** Queued events not yet sent (JSON array of EventRequest) */
     const val EVENT_QUEUE = "$PREFIX.eventQueue"
 }

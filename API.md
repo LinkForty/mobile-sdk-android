@@ -69,14 +69,22 @@ Log.d("LinkForty", "Install ID: ${response.installId}")
 
 #### handleDeepLink(uri)
 
-Handles a deep link URI (App Link or custom scheme).
+Handles a URI that opened the app (App Link or custom scheme). Pass every URI that opens the app; the SDK decides which are LinkForty links.
 
 ```kotlin
-fun handleDeepLink(uri: Uri)
+fun handleDeepLink(uri: Uri): Boolean
 ```
 
 **Parameters:**
 - `uri`: The deep link URI to handle
+
+**Returns:** `true` if the URI is looked up as a LinkForty link, `false` otherwise.
+
+**Which URIs are looked up:**
+- A web (`http`/`https`) URI on one of the workspace's link domains, or on the host of `baseURL`, is resolved on the server and `onDeepLink` receives the link's data.
+- With an `appToken`, the SDK fetches the workspace's link domains (custom domains and the workspace's link host) from the server and stores them on the device. Until it knows them, every web URI is looked up; with no `appToken`, it never learns them.
+- Any other URI, including a custom scheme (`myapp://product/42`) or a web URI on another host, makes no request: `onDeepLink` receives the URI's own path and query parameters, with no `linkId`.
+- A URI handed over before `initialize()` is held. On a launch with no stored domain list, a held URI waits up to 3 seconds for the domain fetch, then is decided against what is known. For a held URI, the return value is `true` for a web URI.
 
 **Example:**
 ```kotlin
@@ -350,7 +358,7 @@ data class LinkFortyConfig(
 **Parameters:**
 - `baseURL`: Backend URL (must be HTTPS except localhost/127.0.0.1/10.0.2.2)
 - `apiKey`: API key (optional for self-hosted)
-- `appToken`: Public workspace token (LinkForty Cloud only). Recommended — required for organic installs (App Store discovery, social mentions, etc.) to be attributed to your workspace. Find it in the dashboard under Workspace Settings → App Token. Format: `at_<32 hex chars>`. Safe to ship in your app bundle.
+- `appToken`: Public workspace token (LinkForty Cloud only). Recommended — required for organic installs (App Store discovery, social mentions, etc.) to be attributed to your workspace. It is sent with every request as `X-LinkForty-App-Token`, so the server answers with your workspace's links only, and lets the SDK learn your link domains (see `handleDeepLink`). Find it in the dashboard under Workspace Settings → App Token. Format: `at_<32 hex chars>`. Safe to ship in your app bundle.
 - `debug`: Enable debug logging (default: false)
 - `attributionWindowHours`: Attribution window in hours (default: 168 = 7 days, max: 2160 = 90 days)
 

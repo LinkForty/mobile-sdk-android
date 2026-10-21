@@ -165,7 +165,8 @@ class Harness(private val context: Context) {
     fun open(uri: Uri) {
         log("openURL", mapOf("url" to uri.toString()))
         try {
-            LinkForty.shared.handleDeepLink(uri)
+            val handled = LinkForty.shared.handleDeepLink(uri)
+            log("handleResult", mapOf("url" to uri.toString(), "handled" to handled))
         } catch (e: Exception) {
             log("handleDeepLinkThrew", mapOf("error" to e.toString()))
         }

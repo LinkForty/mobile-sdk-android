@@ -40,9 +40,13 @@ class DeepLinkHandlerTest {
 
     private fun mockUri(
         pathSegments: List<String> = emptyList(),
-        queryParams: Map<String, String?> = emptyMap()
+        queryParams: Map<String, String?> = emptyMap(),
+        scheme: String = "https",
+        host: String = "go.example.com"
     ): Uri {
         val uri = mockk<Uri>()
+        every { uri.scheme } returns scheme
+        every { uri.host } returns host
         every { uri.pathSegments } returns pathSegments
         every { uri.queryParameterNames } returns queryParams.keys
         every { uri.getQueryParameter(any()) } returns null
@@ -256,7 +260,8 @@ class DeepLinkHandlerTest {
         // Simulate custom scheme: myapp://product/abc123?id=456
         val uri = mockUri(
             pathSegments = listOf("product", "abc123"),
-            queryParams = mapOf("id" to "456")
+            queryParams = mapOf("id" to "456"),
+            scheme = "myapp"
         )
         sut.handleDeepLink(uri)
 

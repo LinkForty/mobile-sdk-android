@@ -180,7 +180,7 @@ suspend fun trackEvent(
 - `name`: Event name (e.g., "purchase", "signup")
 - `properties`: Optional event properties (must be JSON-serializable)
 
-**Throws:** `LinkFortyError` if tracking fails
+**Throws:** `LinkFortyError` for an empty name, when not initialized, or when the server rejects the event (a 4xx). An event that can't be sent now (no connection, or a 5xx) is queued and the call returns normally; see [Offline Support](#offline-support).
 
 **Example:**
 ```kotlin
@@ -206,7 +206,7 @@ suspend fun trackRevenue(
 - `currency`: Currency code (e.g., "USD", "EUR")
 - `properties`: Optional additional properties
 
-**Throws:** `LinkFortyError` if tracking fails
+**Throws:** `LinkFortyError` for an empty name, when not initialized, or when the server rejects the event (a 4xx). An event that can't be sent now (no connection, or a 5xx) is queued and the call returns normally; see [Offline Support](#offline-support).
 
 **Example:**
 ```kotlin
@@ -234,7 +234,7 @@ suspend fun trackScreenView(
 - `name`: Screen name (e.g., "ProductDetail"). Must not be blank.
 - `properties`: Optional additional properties
 
-**Throws:** `LinkFortyError` if tracking fails (including a blank screen name)
+**Throws:** as `trackEvent` does (including for a blank screen name)
 
 **Example:**
 ```kotlin
@@ -247,7 +247,7 @@ For automatic tracking with Jetpack Navigation, use [`LinkFortyNavObserver`](#li
 
 #### flushEvents()
 
-Flushes the event queue, attempting to send all queued events.
+Sends the queued events now, oldest first. The SDK also sends them on its own; see [Offline Support](#offline-support).
 
 ```kotlin
 suspend fun flushEvents()
@@ -563,7 +563,16 @@ lifecycleScope.launch {
 
 ## Offline Support
 
-An event that can't be sent (no connection, or a 5xx response) is queued in memory, up to 100 events, and sent with the next event that succeeds or by `flushEvents()`. An event the server refuses with a 4xx is not queued. The queue does not survive the app being killed.
+Every tracked event is stored on the device before it is sent and removed once the server has it, so events survive the app being closed. An event that can't be sent (no connection, or a 5xx response) stays queued, up to 100 events, and `trackEvent` returns normally. Queued events are sent, oldest first:
+
+- when `initialize()` completes on the next launch,
+- when the app returns to the foreground,
+- after the next event that sends, and
+- when you call `flushEvents()`.
+
+Each event carries a `clientEventId`, generated when it is tracked and kept through every retry, so the server stores an event it receives twice only once. An event the server refuses with a 4xx is not queued, and `trackEvent` throws.
+
+The SDK doesn't watch the network connection and needs no permission beyond `INTERNET`.
 
 ---
 

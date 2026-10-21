@@ -9,8 +9,12 @@ import com.linkforty.sdk.network.HttpMethod
 import com.linkforty.sdk.network.NetworkManagerProtocol
 import com.linkforty.sdk.network.request
 import com.linkforty.sdk.storage.StorageManagerProtocol
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.math.BigDecimal
 import java.time.Instant
+import java.util.Optional
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Tracks custom events and manages event queueing.
@@ -25,12 +29,25 @@ internal class EventTracker(
     /** Last tracked screen name, for the `previousScreen` transition stamp. */
     private var lastScreen: String? = null
 
+    /** One flush at a time, so concurrent triggers send each queued event once. */
+    private val flushMutex = Mutex()
+
+    /**
+     * Events a [trackEvent] call is waiting on, by clientEventId, with the
+     * server's refusal once a flush records one.
+     */
+    private val awaiting = ConcurrentHashMap<String, Optional<LinkFortyError>>()
+
     /**
      * Tracks a custom event.
      *
+     * If it can't be sent now (no connection, or a 5xx response), it is queued
+     * on the device and the call returns normally; the queue is sent later.
+     *
      * @param name Event name (e.g., "purchase", "signup")
      * @param properties Optional event properties (must be JSON-serializable)
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError for an empty name, when not initialized, or when the
+     *   server rejects the event (a 4xx), which is not queued
      */
     suspend fun trackEvent(name: String, properties: Map<String, Any>? = null) {
         // Validate event name
@@ -57,31 +74,38 @@ internal class EventTracker(
             sessionId = stamp.sessionId
         )
 
-        // Try to send immediately
+        // Stored before it is sent, so an app closed mid-send keeps it; the
+        // server stores a resent event once, by its clientEventId.
+        if (!eventQueue.enqueue(event)) {
+            sendNow(event)
+            return
+        }
+        awaiting[event.clientEventId] = Optional.empty()
+        try {
+            flushQueue()
+        } finally {
+            awaiting.remove(event.clientEventId)?.orElse(null)?.let { throw it }
+        }
+        LinkFortyLogger.log("Event tracked: $name")
+    }
+
+    /** Sends an event the full queue had no room for: reported, not retried. */
+    private suspend fun sendNow(event: EventRequest) {
         try {
             sendEvent(event)
         } catch (e: LinkFortyError) {
-            // A failure the server may recover from is queued and sent on a later
-            // flush; one it won't (a 4xx) is only reported.
-            if (isRetryable(e)) {
-                eventQueue.enqueue(event)
-                LinkFortyLogger.log("Event queued due to error: $e")
-            }
-            throw e
+            if (!isRetryable(e)) throw e
+            LinkFortyLogger.log("Event queue full and the send failed; dropping ${event.eventName}: $e")
         }
-        LinkFortyLogger.log("Event tracked: $name")
-
-        // The connection works again: send what was queued.
-        flushQueue()
     }
 
     /**
-     * Tracks a revenue event.
+     * Tracks a revenue event. Queued like [trackEvent] when it can't be sent now.
      *
      * @param amount Revenue amount (must be non-negative)
      * @param currency Currency code (e.g., "USD")
      * @param properties Optional additional properties
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError as [trackEvent] does, or for a negative amount
      */
     suspend fun trackRevenue(
         amount: BigDecimal,
@@ -109,7 +133,7 @@ internal class EventTracker(
      *
      * @param name Screen name (e.g., "ProductDetail")
      * @param properties Optional additional properties
-     * @throws LinkFortyError if tracking fails
+     * @throws LinkFortyError as [trackEvent] does
      */
     suspend fun trackScreenView(name: String, properties: Map<String, Any>? = null) {
         if (name.isBlank()) {
@@ -132,23 +156,27 @@ internal class EventTracker(
     }
 
     /**
-     * Flushes the event queue, attempting to send all queued events.
+     * Flushes the event queue, attempting to send all queued events. Flushes run
+     * one at a time.
      */
-    suspend fun flushQueue() {
+    suspend fun flushQueue() = flushMutex.withLock {
+        if (eventQueue.isEmpty) return@withLock
         LinkFortyLogger.log("Flushing event queue (${eventQueue.count} events)")
 
-        while (!eventQueue.isEmpty) {
-            val event = eventQueue.dequeue() ?: break
+        while (true) {
+            val event = eventQueue.first() ?: break
             try {
                 sendEvent(event)
+                eventQueue.remove(event.clientEventId)
                 LinkFortyLogger.log("Queued event sent: ${event.eventName}")
             } catch (e: LinkFortyError) {
                 if (isRetryable(e)) {
-                    // Keep its place and stop: the rest would fail the same way.
-                    eventQueue.requeueFirst(event)
+                    // Keep it at the head and stop: the rest would fail the same way.
                     LinkFortyLogger.log("Failed to send queued event, keeping it queued: $e")
-                    return
+                    return@withLock
                 }
+                eventQueue.remove(event.clientEventId)
+                awaiting.computeIfPresent(event.clientEventId) { _, _ -> Optional.of(e) }
                 LinkFortyLogger.log("Dropping queued event the server refused: $e")
             }
         }

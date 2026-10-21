@@ -322,4 +322,36 @@ class LaunchFlowTest {
         assertEquals(403, (result.exceptionOrNull() as? LinkFortyError.InvalidResponse)?.statusCode)
         assertEquals(2, server.requestCount)
     }
+
+    /** The clientEventId of each event request the server received, in order. */
+    private fun clientEventIdsOfEventRequests(count: Int): List<String> = (1..count).map {
+        val request = server.takeRequest(10, TimeUnit.SECONDS)!!
+        assertEquals("/api/sdk/v1/event", request.path)
+        Regex("\"clientEventId\":\"([0-9a-f-]{36})\"").find(request.body.readUtf8())!!.groupValues[1]
+    }
+
+    @Test
+    fun eventQueuedOnServerErrorsSurvivesARelaunchAndIsSentOnceWithTheSameId() = runBlocking {
+        enqueueOrganicInstall()
+        LinkForty.initialize(context, config())
+        server.takeRequest(5, TimeUnit.SECONDS) // the install
+
+        // Three attempts, all 5xx: the event stays queued and trackEvent returns normally.
+        repeat(3) { server.enqueue(MockResponse().setResponseCode(503)) }
+        LinkForty.shared.trackEvent("purchase", mapOf("value" to 42))
+        val attempts = clientEventIdsOfEventRequests(3)
+        assertEquals(1, attempts.toSet().size)
+        assertEquals(1, LinkForty.shared.queuedEventCount)
+
+        // The app is closed and opened again: the queued event goes out on initialize.
+        LinkForty.shared.reset()
+        server.enqueue(json("""{"eventId":"evt-1","acknowledged":true}"""))
+        LinkForty.initialize(context, config())
+        val resent = clientEventIdsOfEventRequests(1)
+
+        assertEquals(attempts.first(), resent.single())
+        delay(500)
+        assertEquals(0, LinkForty.shared.queuedEventCount)
+        assertNull(server.takeRequest(1, TimeUnit.SECONDS))
+    }
 }

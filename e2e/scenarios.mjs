@@ -72,8 +72,6 @@ export const scenarios = [
 
   {
     name: 'Callbacks registered before initialize receive the deferred deep link',
-    // Android's `LinkForty.shared` throws until `initialize` is called, by design.
-    platforms: ['iOS'],
     async run(t) {
       const link = await t.link({ deepLinkParameters: { productId: '7' } });
       await t.fresh();
@@ -189,6 +187,11 @@ export const scenarios = [
         const withTemplate = (await t.command('createLink', { ...query, templateId: t.env.templateId,
           templateSlug: t.env.templateSlug ?? '' }, 'createLinkResult')).one('createLinkResult');
         t.check('createLink with a templateId succeeds', withTemplate?.ok === true, withTemplate?.error);
+        const withTemplateAgain = (await t.command('createLink', { ...query, templateId: t.env.templateId,
+          templateSlug: t.env.templateSlug ?? '' }, 'createLinkResult')).one('createLinkResult');
+        t.check('with a templateId, the same user and parameters return the same link',
+          withTemplateAgain?.shortCode === withTemplate?.shortCode && withTemplateAgain?.deduplicated === true,
+          `${withTemplateAgain?.shortCode} vs ${withTemplate?.shortCode}, deduplicated ${withTemplateAgain?.deduplicated}`);
       }
     },
   },

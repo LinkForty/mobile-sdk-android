@@ -40,8 +40,8 @@ class LinkFortyNavObserver(
         val name = screenNameExtractor(destination)?.takeIf { it.isNotBlank() } ?: return
 
         // Fire-and-forget; navigation must not block on network/queue work. If the
-        // SDK isn't initialized yet, trackScreenView (or `shared`) throws and we
-        // simply skip this screen view.
+        // SDK isn't initialized yet, trackScreenView throws and we simply skip
+        // this screen view.
         scope.launch {
             try {
                 LinkForty.shared.trackScreenView(name)

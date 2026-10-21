@@ -13,8 +13,8 @@ const apk = join(root, 'e2e-app/build/outputs/apk/debug/e2e-app-debug.apk');
 const adbPath = process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, 'platform-tools/adb') : 'adb';
 
 // ANDROID_SERIAL picks the device when more than one is attached.
-const adb = (args, input) =>
-  execFileSync(adbPath, args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] });
+const adb = (args, input, timeout = 60000) =>
+  execFileSync(adbPath, args, { encoding: 'utf8', input, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
 const quiet = (args) => {
   try {
     return adb(args);
@@ -48,7 +48,15 @@ function androidDevice(env) {
       // A link that cold-starts the app arrives as the launch intent's data,
       // as an App Link does.
       const data = openURL ? ['-a', 'android.intent.action.VIEW', '-d', openURL] : [];
-      adb(['shell', 'am', 'start', '-W', '-n', `${pkg}/.MainActivity`, ...data, ...extras]);
+      const start = ['shell', 'am', 'start', '-W', '-n', `${pkg}/.MainActivity`, ...data, ...extras];
+      try {
+        adb(start, undefined, 20000);
+      } catch {
+        // Right after a reinstall the system can kill the new process while it
+        // removes the old task, and the launch never completes. Launch again.
+        quiet(['shell', 'am', 'force-stop', pkg]);
+        adb(start, undefined, 20000);
+      }
     },
     async terminate() {
       quiet(['shell', 'am', 'force-stop', pkg]);

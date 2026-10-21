@@ -38,14 +38,12 @@ import java.math.BigDecimal
 class LinkForty private constructor() {
 
     companion object {
-        @Volatile
-        private var instance: LinkForty? = null
-
         /**
-         * The shared SDK instance. Throws [LinkFortyError.NotInitialized] if not yet initialized.
+         * The shared SDK instance. Available before [initialize]: callbacks
+         * registered and links handled before then are kept until it runs.
          */
-        val shared: LinkForty
-            get() = instance ?: throw LinkFortyError.NotInitialized()
+        @JvmStatic
+        val shared: LinkForty = LinkForty()
 
         /** Serializes [initialize] calls, so two at once can't both report the install. */
         private val initMutex = Mutex()
@@ -54,8 +52,8 @@ class LinkForty private constructor() {
          * Initializes the SDK with configuration and reports the install.
          *
          * If reporting the install fails (for example, offline on the first
-         * launch), the SDK is left uninitialized and the call can be retried;
-         * register callbacks again after the retry succeeds.
+         * launch), the SDK is left uninitialized, keeping registered callbacks,
+         * and the call can be retried.
          *
          * @param context Android context (stored as applicationContext)
          * @param config SDK configuration
@@ -71,9 +69,8 @@ class LinkForty private constructor() {
             attributionWindowHours: Int? = null,
             deviceId: String? = null
         ): InstallResponse = initMutex.withLock {
-            if (instance != null) throw LinkFortyError.AlreadyInitialized()
-            val sdk = LinkForty()
-            sdk.doInitialize(context, config, attributionWindowHours ?: config.attributionWindowHours, deviceId)
+            if (shared.isInitialized) throw LinkFortyError.AlreadyInitialized()
+            shared.doInitialize(context, config, attributionWindowHours ?: config.attributionWindowHours, deviceId)
         }
 
         /**
@@ -86,7 +83,7 @@ class LinkForty private constructor() {
          * @param context Android context
          */
         fun isFirstLaunch(context: Context): Boolean {
-            instance?.let { return it.isFirstLaunch() }
+            if (shared.isInitialized) return shared.isFirstLaunch()
             return StorageManager(context.applicationContext).isFirstLaunch()
         }
     }
@@ -98,9 +95,26 @@ class LinkForty private constructor() {
     private var attributionManager: AttributionManager? = null
     private var attributionContext: AttributionContext? = null
     private var eventTracker: EventTracker? = null
-    private var deepLinkHandler: DeepLinkHandler? = null
     private var externalUserId: String? = null
+
+    /** Guards [isInitialized], [deepLinkHandler] and [pendingDeepLinks]. */
+    private val lock = Any()
+
+    @Volatile
     private var isInitialized = false
+
+    /**
+     * Created up front so callbacks registered before [initialize] are kept;
+     * [initialize] configures it.
+     */
+    @Volatile
+    private var deepLinkHandler = DeepLinkHandler()
+
+    /**
+     * Links handed to [handleDeepLink] before [initialize], as when a link
+     * launches the app. Resolved once the SDK is configured.
+     */
+    private val pendingDeepLinks = mutableListOf<Uri>()
 
     /** Whether this launch is the app's first, read before the install is reported. */
     private var firstLaunchThisSession = true
@@ -145,18 +159,20 @@ class LinkForty private constructor() {
             attributionContext = attributionContext
         )
 
-        val handler = DeepLinkHandler()
+        val handler = deepLinkHandler
         handler.configure(
             networkManager = networkManager,
             fingerprintCollector = fingerprintCollector,
             baseURL = config.baseURL,
             attributionContext = attributionContext
         )
-        this.deepLinkHandler = handler
 
-        // Mark as initialized
-        this.isInitialized = true
-        instance = this
+        // Mark as initialized and resolve links that arrived before now
+        val pending = synchronized(lock) {
+            isInitialized = true
+            pendingDeepLinks.toList().also { pendingDeepLinks.clear() }
+        }
+        pending.forEach { handler.handleDeepLink(it) }
 
         // Only the launch that reports the install delivers a deferred deep link;
         // later launches get the cached attribution without a callback.
@@ -170,14 +186,14 @@ class LinkForty private constructor() {
                 appToken = config.appToken
             )
         } catch (e: Throwable) {
-            // Leave the SDK uninitialized so the app can call initialize() again.
-            reset()
+            // Leave the SDK uninitialized, keeping callbacks, so the app can call initialize() again.
+            tearDownManagers()
             throw e
         }
 
         // The deferred deep link, or null for an organic install
         if (isNewInstall) {
-            deepLinkHandler?.deliverDeferredDeepLink(response.deepLinkData.takeIf { response.attributed })
+            handler.deliverDeferredDeepLink(response.deepLinkData.takeIf { response.attributed })
         }
 
         LinkFortyLogger.log("SDK initialized successfully (attributed: ${response.attributed})")
@@ -190,40 +206,46 @@ class LinkForty private constructor() {
     /**
      * Handles a deep link URI (App Link or custom scheme).
      *
+     * A link handed over before [initialize], as when it launches the app, is
+     * held and resolved once [initialize] has configured the SDK.
+     *
      * @param uri Deep link URI to handle
      */
     fun handleDeepLink(uri: Uri) {
-        if (!isInitialized) {
-            LinkFortyLogger.log("SDK not initialized. Call initialize() first.")
+        val handler = synchronized(lock) {
+            if (!isInitialized) {
+                pendingDeepLinks.add(uri)
+                null
+            } else {
+                deepLinkHandler
+            }
+        }
+        if (handler == null) {
+            LinkFortyLogger.log("Deep link held until initialize(): $uri")
             return
         }
-        deepLinkHandler?.handleDeepLink(uri)
+        handler.handleDeepLink(uri)
     }
 
     /**
-     * Registers a callback for deferred deep links (triggered on first launch after attributed install).
+     * Registers a callback for deferred deep links, called once on the launch
+     * that reports the install: with the link's data, or null for an organic
+     * install. Can be registered before or after [initialize].
      *
      * @param callback Callback invoked with deep link data, or null for organic installs
      */
     fun onDeferredDeepLink(callback: DeferredDeepLinkCallback) {
-        if (!isInitialized) {
-            LinkFortyLogger.log("SDK not initialized. Call initialize() first.")
-            return
-        }
-        deepLinkHandler?.onDeferredDeepLink(callback)
+        deepLinkHandler.onDeferredDeepLink(callback)
     }
 
     /**
-     * Registers a callback for direct deep links (triggered when app opens from link).
+     * Registers a callback for direct deep links (triggered when app opens from
+     * link). Can be registered before or after [initialize].
      *
      * @param callback Callback invoked with URI and deep link data
      */
     fun onDeepLink(callback: DeepLinkCallback) {
-        if (!isInitialized) {
-            LinkFortyLogger.log("SDK not initialized. Call initialize() first.")
-            return
-        }
-        deepLinkHandler?.onDeepLink(callback)
+        deepLinkHandler.onDeepLink(callback)
     }
 
     // -- User Identity --
@@ -328,10 +350,10 @@ class LinkForty private constructor() {
     /**
      * Creates a short link programmatically.
      *
-     * Requires an API key in [LinkFortyConfig].
-     * If [CreateLinkOptions.templateId] is provided, uses the dashboard endpoint (`POST /api/links`).
-     * Otherwise, uses the simplified SDK endpoint (`POST /api/sdk/v1/links`)
-     * which auto-selects the organization's most recent template.
+     * Requires an API key in [LinkFortyConfig]. Posts to the SDK link endpoint
+     * (`POST /api/sdk/v1/links`), which uses [CreateLinkOptions.templateId] when
+     * given and the organization's most recent template otherwise. A server
+     * without that endpoint (404) gets `POST /api/links` instead.
      *
      * @param options Link creation options
      * @return [CreateLinkResult] with the shareable URL, short code, and link ID
@@ -353,41 +375,50 @@ class LinkForty private constructor() {
             options
         }
 
-        return if (resolvedOptions.templateId != null) {
-            // Use dashboard endpoint with explicit templateId
-            val response: DashboardCreateLinkResponse = networkManager.request(
-                endpoint = "/api/links",
-                method = HttpMethod.POST,
-                body = resolvedOptions
-            )
-
-            // The server's short URL carries the link's own domain; servers that
-            // don't return one get it built from the base URL.
-            val url = response.shortUrl ?: run {
-                val baseUrl = config.baseURL.trimEnd('/')
-                val templateSlug = resolvedOptions.templateSlug ?: ""
-                val pathSegment = if (templateSlug.isEmpty()) {
-                    response.shortCode
-                } else {
-                    "$templateSlug/${response.shortCode}"
-                }
-                "$baseUrl/$pathSegment"
-            }
-
-            CreateLinkResult(
-                url = url,
-                shortCode = response.shortCode,
-                linkId = response.id,
-                deduplicated = null
-            )
-        } else {
-            // Use simplified SDK endpoint (auto-selects template)
+        return try {
             networkManager.request(
                 endpoint = "/api/sdk/v1/links",
                 method = HttpMethod.POST,
                 body = resolvedOptions
             )
+        } catch (e: LinkFortyError.InvalidResponse) {
+            if (e.statusCode != 404) throw e
+            LinkFortyLogger.log("Server has no SDK link endpoint; creating the link with POST /api/links")
+            createDashboardLink(networkManager, config, resolvedOptions)
         }
+    }
+
+    /** `POST /api/links`, for servers without the SDK link endpoint. */
+    private suspend fun createDashboardLink(
+        networkManager: NetworkManager,
+        config: LinkFortyConfig,
+        options: CreateLinkOptions
+    ): CreateLinkResult {
+        val response: DashboardCreateLinkResponse = networkManager.request(
+            endpoint = "/api/links",
+            method = HttpMethod.POST,
+            body = options
+        )
+
+        // The server's short URL carries the link's own domain; servers that
+        // don't return one get it built from the base URL.
+        val url = response.shortUrl ?: run {
+            val baseUrl = config.baseURL.trimEnd('/')
+            val templateSlug = options.templateSlug ?: ""
+            val pathSegment = if (templateSlug.isEmpty()) {
+                response.shortCode
+            } else {
+                "$templateSlug/${response.shortCode}"
+            }
+            "$baseUrl/$pathSegment"
+        }
+
+        return CreateLinkResult(
+            url = url,
+            shortCode = response.shortCode,
+            linkId = response.id,
+            deduplicated = null
+        )
     }
 
     // -- Attribution Data --
@@ -428,25 +459,36 @@ class LinkForty private constructor() {
         attributionManager?.clearData()
         attributionContext?.clear()
         eventTracker?.clearQueue()
-        deepLinkHandler?.clearDeferredDeepLink()
+        deepLinkHandler.clearDeferredDeepLink()
         externalUserId = null
         LinkFortyLogger.log("All SDK data cleared")
     }
 
     /**
-     * Resets the SDK to uninitialized state.
+     * Resets the SDK to uninitialized state, removing registered callbacks.
      * Note: This does NOT clear stored data. Call [clearData] first if needed.
      */
     fun reset() {
+        tearDownManagers()
+        synchronized(lock) {
+            deepLinkHandler = DeepLinkHandler()
+            pendingDeepLinks.clear()
+        }
+        externalUserId = null
+        firstLaunchThisSession = true
+        LinkFortyLogger.log("SDK reset to uninitialized state")
+    }
+
+    /**
+     * Returns the SDK to uninitialized state, keeping registered callbacks, so
+     * [initialize] can be called again.
+     */
+    private fun tearDownManagers() {
+        synchronized(lock) { isInitialized = false }
         config = null
         networkManager = null
         attributionManager = null
         attributionContext = null
         eventTracker = null
-        deepLinkHandler = null
-        externalUserId = null
-        isInitialized = false
-        instance = null
-        LinkFortyLogger.log("SDK reset to uninitialized state")
     }
 }

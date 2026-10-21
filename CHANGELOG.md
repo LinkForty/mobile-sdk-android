@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `clearData()` keeps the app's registered `onDeepLink` and `onDeferredDeepLink` callbacks, so deep links keep working after it.
 - `createLink()` with a `templateId` returns the short URL the server reports for the link, which carries the link's own domain, when the server provides one.
 - Concurrent `initialize()` calls are serialized, so only one reports the install.
+- `LinkForty.shared` is available before `initialize()`. `onDeferredDeepLink` and `onDeepLink` callbacks registered before then are kept, and a link passed to `handleDeepLink` before then, as when an App Link launches the app, is held and resolved once `initialize()` has configured the SDK. `shared` previously threw `NotInitialized`, so an Activity handling its launch intent before initialization finished crashed. A failed `initialize()` keeps registered callbacks.
+- `createLink()` always posts to `POST /api/sdk/v1/links`, with the `templateId` when one is given, so `externalUserId` reaches the server and repeat links for the same user and parameters are deduplicated. A `templateId` previously sent the request to `POST /api/links`, which ignores `externalUserId`. A server without the SDK link endpoint (404) gets `POST /api/links` instead.
 
 ### Changed
 - An organic install calls `onDeferredDeepLink(null)` on the launch that reports the install, as documented. Code in an app's organic-install branch now runs; it is not called on later launches, or on installs reported before this version.

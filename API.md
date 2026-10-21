@@ -27,7 +27,7 @@ Main singleton class providing the SDK interface.
 LinkForty.shared
 ```
 
-Throws `LinkFortyError.NotInitialized` if `initialize()` has not been called.
+Available before `initialize()`. Callbacks registered with `onDeferredDeepLink` / `onDeepLink` and links passed to `handleDeepLink` before then are kept, and the links are resolved once `initialize()` has configured the SDK. Methods that need a reported install (`trackEvent`, `createLink`, …) throw `LinkFortyError.NotInitialized` until `initialize()` succeeds.
 
 ### Methods
 
@@ -149,7 +149,7 @@ suspend fun createLink(options: CreateLinkOptions): CreateLinkResult
 - `LinkFortyError.NotInitialized` if SDK not initialized
 - `LinkFortyError.MissingApiKey` if no API key configured
 
-**Note:** Requires an API key. If `templateId` is provided, uses `POST /api/links`. Otherwise, uses `POST /api/sdk/v1/links`.
+**Note:** Requires an API key. Posts to `POST /api/sdk/v1/links`, which uses `templateId` when given and the most recent template otherwise, and attaches `externalUserId` (per call, or from `setExternalUserId`). A server without that endpoint (404) gets `POST /api/links` instead; `deduplicated` is then `null`.
 
 **Example:**
 ```kotlin

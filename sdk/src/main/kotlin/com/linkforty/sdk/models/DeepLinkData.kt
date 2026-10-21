@@ -8,6 +8,7 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.JsonWriter
+import com.squareup.moshi.Moshi
 import com.squareup.moshi.ToJson
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -93,22 +94,45 @@ fun DeepLinkData.mergingUrlParameters(fromUrl: Map<String, String>?): DeepLinkDa
  * outright — taking SDK initialization down with it — over a field the caller
  * never needed.
  *
+ * A link's parameters can hold any JSON value, while [DeepLinkData.customParameters]
+ * is a map of strings: numbers and booleans arrive as their text (`42`, `true`),
+ * objects and arrays as JSON.
+ *
  * Only registered on the SDK's network [com.squareup.moshi.Moshi] instance;
  * locally stored deep link data is written by the SDK and stays strict.
  */
 internal class LenientDeepLinkDataAdapter {
+
+    private val anyAdapter = Moshi.Builder().build().adapter(Any::class.java)
 
     @FromJson
     fun fromJson(reader: JsonReader, delegate: JsonAdapter<DeepLinkData>): DeepLinkData? {
         val value = reader.readJsonValue()
         if (value !is Map<*, *>) return null
 
+        val parameters = value["customParameters"]
+        val normalized = if (parameters is Map<*, *>) {
+            val text = parameters.mapValues { (_, v) -> parameterText(v) }.filterValues { it != null }
+            value.mapKeys { (k, _) -> k.toString() } + ("customParameters" to text)
+        } else {
+            value
+        }
+
         return try {
-            delegate.fromJsonValue(value)
+            delegate.fromJsonValue(normalized)
         } catch (e: JsonDataException) {
             LinkFortyLogger.log("Ignoring undecodable deepLinkData: ${e.message}")
             null
         }
+    }
+
+    private fun parameterText(value: Any?): String? = when (value) {
+        null -> null
+        is String -> value
+        // JSON numbers decode as Double; 42 reads as "42", not "42.0".
+        is Double -> if (value % 1.0 == 0.0 && value in -9.0E15..9.0E15) value.toLong().toString() else value.toString()
+        is Boolean -> value.toString()
+        else -> anyAdapter.toJson(value)
     }
 
     @ToJson

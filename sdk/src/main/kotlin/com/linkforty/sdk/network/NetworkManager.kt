@@ -8,6 +8,8 @@ import com.linkforty.sdk.models.LenientDeepLinkDataAdapter
 import com.linkforty.sdk.models.LinkFortyConfig
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.delay
+import java.io.IOException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.pow
 
 /**
@@ -72,6 +74,8 @@ internal class NetworkManager(
         for (attempt in 1..maxRetries) {
             try {
                 return performRequest(endpoint, method, body, headers, responseType)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: LinkFortyError) {
                 lastError = e
 
@@ -86,17 +90,20 @@ internal class NetworkManager(
                     is LinkFortyError.EncodingError -> throw e
                     else -> { /* retryable */ }
                 }
-
-                // Exponential backoff: 1s, 2s, 4s
-                if (attempt < maxRetries) {
-                    val delayMs = 2.0.pow((attempt - 1).toDouble()).toLong() * 1000
-                    LinkFortyLogger.log(
-                        "Request failed (attempt $attempt/$maxRetries), retrying in ${delayMs / 1000}s..."
-                    )
-                    delay(delayMs)
-                }
+            } catch (e: IOException) {
+                // Timeouts, refused connections and DNS failures are transient.
+                lastError = LinkFortyError.NetworkError(e)
             } catch (e: Exception) {
                 throw LinkFortyError.NetworkError(e)
+            }
+
+            // Exponential backoff: 1s, 2s
+            if (attempt < maxRetries) {
+                val delayMs = 2.0.pow((attempt - 1).toDouble()).toLong() * 1000
+                LinkFortyLogger.log(
+                    "Request failed (attempt $attempt/$maxRetries), retrying in ${delayMs / 1000}s..."
+                )
+                delay(delayMs)
             }
         }
 

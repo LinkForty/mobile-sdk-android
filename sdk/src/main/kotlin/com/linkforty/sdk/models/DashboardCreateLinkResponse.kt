@@ -10,5 +10,6 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 internal data class DashboardCreateLinkResponse(
     val id: String,
-    @Json(name = "short_code") val shortCode: String
+    @Json(name = "short_code") val shortCode: String,
+    @Json(name = "short_url") val shortUrl: String? = null
 )

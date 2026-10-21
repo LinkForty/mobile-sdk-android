@@ -34,6 +34,12 @@ internal class EventQueue {
      * Dequeues the oldest event.
      * @return the oldest event, or null if queue is empty
      */
+    /** Puts an event back at the head of the queue, keeping its place in line. */
+    @Synchronized
+    fun requeueFirst(event: EventRequest) {
+        queue.addFirst(event)
+    }
+
     @Synchronized
     fun dequeue(): EventRequest? {
         return if (queue.isEmpty()) null else queue.removeFirst()

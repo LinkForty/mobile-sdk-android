@@ -248,6 +248,83 @@ class NetworkManagerTest {
         val customHeader = mockHttpClient.lastHeaders?.get("X-Custom-Header")
         assertEquals("custom-value", customHeader)
     }
+
+    @Test
+    fun `a connection failure is retried and then reported as a network error`() = runTest {
+        mockHttpClient.mockError = java.io.IOException("Failed to connect")
+
+        assertThrows<LinkFortyError.NetworkError> {
+            sut.request<InstallResponse>(endpoint = "/api/test", method = HttpMethod.GET)
+        }
+
+        assertEquals(3, mockHttpClient.requestCount)
+    }
+
+    @Test
+    fun `a connection failure followed by success returns the response`() = runTest {
+        val flaky = object : HttpClient {
+            var calls = 0
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                body: ByteArray?,
+                headers: Map<String, String>
+            ): HttpResponse {
+                calls++
+                if (calls == 1) throw java.net.SocketTimeoutException("timeout")
+                return HttpResponse(
+                    200,
+                    """{"installId":"id","attributed":false,"confidenceScore":0,"matchedFactors":[]}""".toByteArray()
+                )
+            }
+        }
+        val manager = NetworkManager(config, flaky)
+
+        val response: InstallResponse = manager.request(endpoint = "/api/test", method = HttpMethod.GET)
+
+        assertEquals("id", response.installId)
+        assertEquals(2, flaky.calls)
+    }
+
+    @Test
+    fun `cancellation is not turned into a network error`() = runTest {
+        mockHttpClient.mockError = kotlinx.coroutines.CancellationException("cancelled")
+
+        assertThrows<kotlinx.coroutines.CancellationException> {
+            sut.request<InstallResponse>(endpoint = "/api/test", method = HttpMethod.GET)
+        }
+
+        assertEquals(1, mockHttpClient.requestCount)
+    }
+
+    @Test
+    fun `link parameters that are not strings decode as text`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(
+            200,
+            """{"shortCode":"abc","linkId":"link-1","customParameters":{"id":42,"premium":true,"price":9.5,"tags":["a"],"name":"x","none":null}}""".toByteArray()
+        )
+
+        val data: com.linkforty.sdk.models.DeepLinkData =
+            sut.request(endpoint = "/api/sdk/v1/resolve/abc", method = HttpMethod.GET)
+
+        assertEquals("link-1", data.linkId)
+        assertEquals(
+            mapOf("id" to "42", "premium" to "true", "price" to "9.5", "tags" to "[\"a\"]", "name" to "x"),
+            data.customParameters
+        )
+    }
+
+    @Test
+    fun `an install attributed to a link with non-string parameters keeps its deep link`() = runTest {
+        mockHttpClient.mockResponse = HttpResponse(
+            200,
+            """{"installId":"id","attributed":true,"confidenceScore":90,"matchedFactors":["ip"],"deepLinkData":{"shortCode":"abc","customParameters":{"productId":42}}}""".toByteArray()
+        )
+
+        val response: InstallResponse = sut.request(endpoint = "/api/sdk/v1/install", method = HttpMethod.POST)
+
+        assertEquals("42", response.deepLinkData?.customParameters?.get("productId"))
+    }
 }
 
 // -- Test Helpers --

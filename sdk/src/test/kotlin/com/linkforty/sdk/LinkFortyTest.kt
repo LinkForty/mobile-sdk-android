@@ -1,7 +1,9 @@
 package com.linkforty.sdk
 
 import com.linkforty.sdk.errors.LinkFortyError
+import com.linkforty.sdk.models.CreateLinkOptions
 import com.linkforty.sdk.models.LinkFortyConfig
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -13,22 +15,42 @@ class LinkFortyTest {
     // -- Pre-initialization Tests --
 
     @Test
-    fun `shared throws NotInitialized when not initialized`() {
-        // Reset any existing state
-        try { LinkForty.shared.reset() } catch (_: Exception) {}
+    fun `shared is available before initialization`() {
+        LinkForty.shared.reset()
 
-        assertThrows<LinkFortyError.NotInitialized> {
-            LinkForty.shared
-        }
+        assertNull(LinkForty.shared.getExternalUserId())
     }
 
     @Test
     fun `getInstallId returns null before initialization`() {
-        try { LinkForty.shared.reset() } catch (_: Exception) {}
+        LinkForty.shared.reset()
 
-        // shared throws, so we can't call getInstallId
+        assertNull(LinkForty.shared.getInstallId())
+    }
+
+    @Test
+    fun `callbacks can be registered before initialization`() {
+        LinkForty.shared.reset()
+
+        LinkForty.shared.onDeferredDeepLink { }
+        LinkForty.shared.onDeepLink { _, _ -> }
+    }
+
+    @Test
+    fun `trackEvent before initialization throws NotInitialized`() {
+        LinkForty.shared.reset()
+
         assertThrows<LinkFortyError.NotInitialized> {
-            LinkForty.shared.getInstallId()
+            runBlocking { LinkForty.shared.trackEvent("purchase") }
+        }
+    }
+
+    @Test
+    fun `createLink before initialization throws NotInitialized`() {
+        LinkForty.shared.reset()
+
+        assertThrows<LinkFortyError.NotInitialized> {
+            runBlocking { LinkForty.shared.createLink(CreateLinkOptions()) }
         }
     }
 

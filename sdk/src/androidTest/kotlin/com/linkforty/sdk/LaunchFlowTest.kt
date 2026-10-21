@@ -14,8 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -164,17 +166,60 @@ class LaunchFlowTest {
     }
 
     @Test
-    fun initializeThatFailsCanBeRetried() = runBlocking {
+    fun initializeThatFailsCanBeRetriedAndKeepsCallbacks() = runBlocking {
+        val deferred = mutableListOf<DeepLinkData?>()
+        LinkForty.shared.onDeferredDeepLink { deferred.add(it) }
         server.enqueue(MockResponse().setResponseCode(400).setBody("bad request"))
 
         val failed = runCatching { LinkForty.initialize(context, config()) }
         assertTrue(failed.exceptionOrNull() is LinkFortyError.InvalidResponse)
-        assertTrue(runCatching { LinkForty.shared }.isFailure)
+        assertNull(LinkForty.shared.getInstallId())
 
         enqueueAttributedInstall()
         val response = LinkForty.initialize(context, config())
+        settle()
         assertEquals("install-1", response.installId)
         assertEquals(2, server.requestCount)
+        assertEquals(listOf("welcome"), deferred.map { it?.shortCode })
+    }
+
+    @Test
+    fun callbacksRegisteredBeforeInitializeReceiveTheDeferredDeepLink() = runBlocking {
+        val deferred = mutableListOf<DeepLinkData?>()
+        LinkForty.shared.onDeferredDeepLink { deferred.add(it) }
+        enqueueAttributedInstall()
+
+        LinkForty.initialize(context, config())
+        settle()
+
+        assertEquals(listOf("welcome"), deferred.map { it?.shortCode })
+    }
+
+    @Test
+    fun linkHandledBeforeInitializeIsDeliveredOnceInitialized() = runBlocking {
+        val opened = mutableListOf<String?>()
+        LinkForty.shared.onDeepLink { _, data -> opened.add(data?.shortCode) }
+
+        LinkForty.shared.handleDeepLink(Uri.parse("https://go.example.com/abc"))
+        settle()
+        assertTrue(opened.isEmpty())
+
+        // The held link's resolve and the install report run concurrently.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path.orEmpty().startsWith("/api/sdk/v1/resolve/")) {
+                    json("""{"shortCode":"abc","linkId":"link-1"}""")
+                } else {
+                    json(
+                        """{"installId":"install-1","attributed":false,"confidenceScore":0,""" +
+                            """"matchedFactors":[],"deepLinkData":null}"""
+                    )
+                }
+        }
+        LinkForty.initialize(context, config())
+        settle()
+
+        assertEquals(listOf<String?>("abc"), opened)
     }
 
     @Test
@@ -218,14 +263,63 @@ class LaunchFlowTest {
     }
 
     @Test
-    fun createLinkWithTemplateUsesTheServerShortUrl() = runBlocking {
+    fun createLinkWithTemplateUsesTheSdkEndpointWithTheUser() = runBlocking {
         enqueueAttributedInstall()
         LinkForty.initialize(context, config())
+        server.takeRequest(5, TimeUnit.SECONDS)
+        server.enqueue(json("""{"url":"https://links.example.com/promo/abc","shortCode":"abc","linkId":"link-1","deduplicated":false}"""))
+
+        val result = LinkForty.shared.createLink(
+            CreateLinkOptions(templateId = "template-1", templateSlug = "promo", externalUserId = "user-1")
+        )
+
+        val request = server.takeRequest(5, TimeUnit.SECONDS)
+        val body = request?.body?.readUtf8().orEmpty()
+        assertEquals("/api/sdk/v1/links", request?.path)
+        assertTrue(body, body.contains("\"templateId\":\"template-1\""))
+        assertTrue(body, body.contains("\"externalUserId\":\"user-1\""))
+        assertEquals("https://links.example.com/promo/abc", result.url)
+        assertEquals(false, result.deduplicated)
+    }
+
+    @Test
+    fun createLinkFallsBackToTheLinksEndpointOn404() = runBlocking {
+        enqueueAttributedInstall()
+        LinkForty.initialize(context, config())
+        server.takeRequest(5, TimeUnit.SECONDS)
+        server.enqueue(MockResponse().setResponseCode(404).setBody("Not Found"))
         server.enqueue(json("""{"id":"link-1","short_code":"abc","short_url":"https://links.example.com/promo/abc"}"""))
 
         val result = LinkForty.shared.createLink(CreateLinkOptions(templateId = "template-1", templateSlug = "promo"))
 
+        assertEquals("/api/sdk/v1/links", server.takeRequest(5, TimeUnit.SECONDS)?.path)
+        assertEquals("/api/links", server.takeRequest(5, TimeUnit.SECONDS)?.path)
         assertEquals("https://links.example.com/promo/abc", result.url)
         assertNull(result.deduplicated)
+    }
+
+    @Test
+    fun createLinkFallbackBuildsTheUrlWhenTheServerReturnsNone() = runBlocking {
+        enqueueAttributedInstall()
+        LinkForty.initialize(context, config())
+        server.enqueue(MockResponse().setResponseCode(404).setBody("Not Found"))
+        server.enqueue(json("""{"id":"link-1","short_code":"abc"}"""))
+
+        val result = LinkForty.shared.createLink(CreateLinkOptions(templateSlug = "promo"))
+
+        assertEquals("${config().baseURL}/promo/abc", result.url)
+    }
+
+    @Test
+    fun createLinkDoesNotFallBackOnOtherErrors() = runBlocking {
+        enqueueAttributedInstall()
+        LinkForty.initialize(context, config())
+        server.takeRequest(5, TimeUnit.SECONDS)
+        server.enqueue(MockResponse().setResponseCode(403).setBody("Forbidden"))
+
+        val result = runCatching { LinkForty.shared.createLink(CreateLinkOptions(templateId = "template-1")) }
+
+        assertEquals(403, (result.exceptionOrNull() as? LinkFortyError.InvalidResponse)?.statusCode)
+        assertEquals(2, server.requestCount)
     }
 }

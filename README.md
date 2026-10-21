@@ -56,9 +56,9 @@ import com.linkforty.sdk.LinkForty
 import com.linkforty.sdk.models.LinkFortyConfig
 
 class MyApplication : Application() {
-    // Main.immediate starts initialize() right away, so `LinkForty.shared` is set
-    // before your first Activity handles its intent.
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Any dispatcher works: callbacks registered and links handled before
+    // initialize() finishes are kept until it does.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
@@ -83,6 +83,8 @@ class MyApplication : Application() {
 ```
 
 ### 2. Handle Deferred Deep Links (Install Attribution)
+
+Register before or after `initialize()`. The callback runs once, on the launch that reports the install.
 
 ```kotlin
 LinkForty.shared.onDeferredDeepLink { deepLinkData ->
@@ -151,6 +153,8 @@ LinkForty.shared.onDeepLink { uri, deepLinkData ->
     }
 }
 ```
+
+A link handed to `handleDeepLink` before `initialize()` has finished, as when it launches the app, is held and delivered once it has.
 
 > **Server-side resolution:** When the SDK is initialized, deep links are automatically resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. If the server is unreachable, the SDK falls back to local URL parsing.
 

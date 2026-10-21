@@ -146,6 +146,66 @@ export const scenarios = [
   },
 
   {
+    name: 'An event tracked offline survives the app closing and is stored once',
+    async run(t) {
+      await t.fresh();
+      const launch = await t.launch();
+      const installId = launch.one('initResult')?.installId;
+      t.proxy.eventMode = 'offline';
+      const tracked = await t.command('track', { name: 'offline_purchase' }, 'queued');
+      t.check('trackEvent returns normally while offline', tracked.one('trackResult')?.ok === true,
+        tracked.one('trackResult')?.error);
+      t.check('the event is kept on the device', tracked.one('queued')?.count === 1, `${tracked.one('queued')?.count} queued`);
+
+      t.proxy.eventMode = 'normal';
+      await t.launch();
+      const state = await t.command('state', {}, 'state');
+      t.check('the next launch sends it', state.one('state')?.queued === 0, `${state.one('state')?.queued} queued`);
+      await t.dbCheck('it is stored once', async () => (await t.storedEvents(installId, 'offline_purchase')) === 1,
+        async () => `${await t.storedEvents(installId, 'offline_purchase')} stored`);
+    },
+  },
+
+  {
+    name: 'An event whose reply is lost is stored once when it is sent again',
+    async run(t) {
+      await t.fresh();
+      const launch = await t.launch();
+      const installId = launch.one('initResult')?.installId;
+      t.proxy.eventMode = 'drop-reply';
+      const tracked = await t.command('track', { name: 'lost_reply' }, 'queued');
+      t.check('trackEvent returns normally', tracked.one('trackResult')?.ok === true, tracked.one('trackResult')?.error);
+      t.check('the app keeps the event it could not confirm', tracked.one('queued')?.count === 1,
+        `${tracked.one('queued')?.count} queued`);
+
+      t.proxy.eventMode = 'normal';
+      const flushed = await t.command('flush', {}, 'queued');
+      t.check('the retry is accepted', flushed.one('queued')?.count === 0, `${flushed.one('queued')?.count} queued`);
+      await t.dbCheck('the server stored it once', async () => (await t.storedEvents(installId, 'lost_reply')) === 1,
+        async () => `${await t.storedEvents(installId, 'lost_reply')} stored`);
+    },
+  },
+
+  {
+    name: 'Queued events are sent when the app returns to the foreground',
+    async run(t) {
+      await t.fresh();
+      const launch = await t.launch();
+      const installId = launch.one('initResult')?.installId;
+      t.proxy.eventMode = 'offline';
+      await t.command('track', { name: 'foreground_purchase' }, 'queued');
+
+      t.proxy.eventMode = 'normal';
+      const returned = await t.backgroundAndReturn();
+      t.check('the app returned without restarting', returned.all('launch').length === 0,
+        `${returned.all('launch').length} new launch(es)`);
+      await t.dbCheck('returning to the foreground sends it', async () =>
+        (await t.storedEvents(installId, 'foreground_purchase')) === 1,
+      async () => `${await t.storedEvents(installId, 'foreground_purchase')} stored`);
+    },
+  },
+
+  {
     name: 'A first launch that fails offline recovers in the same session',
     async run(t) {
       await t.fresh();

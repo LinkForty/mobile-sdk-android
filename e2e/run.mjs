@@ -61,6 +61,14 @@ function androidDevice(env) {
     async terminate() {
       quiet(['shell', 'am', 'force-stop', pkg]);
     },
+    async background() {
+      adb(['shell', 'input', 'keyevent', 'KEYCODE_HOME']);
+    },
+    async foreground() {
+      // MainActivity is singleTask, so this brings the running task back
+      // rather than starting a new process.
+      adb(['shell', 'am', 'start', '-n', `${pkg}/.MainActivity`]);
+    },
     async sendCommand(command) {
       writeFile('lfe2e-commands.jsonl', `${JSON.stringify(command)}\n`, true);
     },

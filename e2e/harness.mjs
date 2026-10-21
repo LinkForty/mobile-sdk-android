@@ -33,8 +33,17 @@ export function readEnv() {
  */
 function startProxy(env) {
   const target = new URL(env.baseURL);
-  const proxy = { ip: '203.0.113.10' };
+  // eventMode applies to POST /api/sdk/v1/event only: 'normal'; 'offline'
+  // drops the connection, as with no network; 'drop-reply' lets the server
+  // store the event and drops the connection before the reply reaches the app.
+  const proxy = { ip: '203.0.113.10', eventMode: 'normal' };
   const server = createServer((req, res) => {
+    const isEvent = req.method === 'POST' && req.url?.startsWith('/api/sdk/v1/event');
+    if (isEvent && proxy.eventMode === 'offline') {
+      req.socket.destroy();
+      return;
+    }
+    const dropReply = isEvent && proxy.eventMode === 'drop-reply';
     const upstream = httpRequest({
       hostname: target.hostname,
       port: target.port,
@@ -42,6 +51,11 @@ function startProxy(env) {
       method: req.method,
       headers: { ...req.headers, host: target.host, 'x-forwarded-for': proxy.ip },
     }, (response) => {
+      if (dropReply) {
+        response.resume();
+        response.on('end', () => req.socket.destroy());
+        return;
+      }
       res.writeHead(response.statusCode, response.headers);
       response.pipe(res);
     });
@@ -152,6 +166,11 @@ class Context {
     return this.count(`SELECT count(*) FROM click_events WHERE link_id = ${this.q(link.id)} AND is_bot`);
   }
 
+  /** In-app events the server stored for an install under a name. */
+  async storedEvents(installId, name) {
+    return this.count(`SELECT count(*) FROM in_app_events WHERE install_id = ${this.q(installId)} AND event_name = ${this.q(name)}`);
+  }
+
   async installsSinceStart() {
     return this.count(`SELECT count(*) FROM install_events WHERE created_at BETWEEN ${this.q(this.startedAt)}::timestamp AND now() AT TIME ZONE 'utc' AND sdk_name = ${this.q(this.device.sdkName)}`);
   }
@@ -170,6 +189,7 @@ class Context {
   }
 
   async begin() {
+    this.proxy.eventMode = 'normal';
     this.proxy.ip = `203.0.${Math.floor(Math.random() * 250) + 1}.${Math.floor(Math.random() * 250) + 1}`;
     if (this.env.databaseURL) this.startedAt = this.sql(`SELECT (now() AT TIME ZONE 'utc')::text`);
   }
@@ -228,6 +248,14 @@ class Context {
     await wait(settle);
     collected.push(...(await this.newEntries()));
     return new Entries(collected);
+  }
+
+  /** Sends the app to the background and brings it back without restarting it. */
+  async backgroundAndReturn() {
+    await this.device.background();
+    await wait(2000);
+    await this.device.foreground();
+    return this.collect(() => false, 3000, 2000);
   }
 
   /** Kills the app and launches it again; returns this launch's log. */

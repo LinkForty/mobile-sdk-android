@@ -52,7 +52,7 @@ suspend fun initialize(
 
 **Returns:** `InstallResponse` with attribution data
 
-**Throws:** `LinkFortyError` if initialization fails. If the install can't be reported (for example, offline on the first launch), the SDK is left uninitialized: call `initialize()` again, then register callbacks again.
+**Throws:** `LinkFortyError` if initialization fails. If the install can't be reported (for example, offline on the first launch), the SDK is left uninitialized and keeps registered callbacks: call `initialize()` again.
 
 **Example:**
 ```kotlin

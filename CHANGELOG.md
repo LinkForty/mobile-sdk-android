@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+## [1.8.0] - 2026-10-22
 ### Added
-- For an install from Google Play, the SDK reads the Play install referrer (Play Install Referrer API) on the launch that reports the install and sends it as `installReferrer`. A LinkForty link puts its click id in the referrer of the Play listing it sends a visitor to, so a server on `@linkforty/core` 1.41.1 or later matches the install to that exact click: `attributionMethod` is `"install_referrer"`, `confidenceScore` 100 and `competingLinks` 0. The SDK waits at most 2 seconds for Play; without a referrer (another store, a sideload, no answer) the install is matched by fingerprint as before.
+- For an install from Google Play, the SDK reads the Play install referrer (Play Install Referrer API) on the launch that reports the install and sends it as `installReferrer`. A LinkForty link puts its click id in the referrer of the Play listing it sends a visitor to, so a server on `@linkforty/core` 1.41.1 or later matches the install to that exact click: `attributionMethod` is `"install_referrer"`, `confidenceScore` 100 and `competingLinks` 0. The SDK waits at most 2 seconds for Play; without a referrer (another store, a sideload, no answer) the install is matched by fingerprint as before ([#19](https://github.com/LinkForty/mobile-sdk-android/pull/19)).
 
 ### Changed
-- The SDK depends on `com.android.installreferrer:installreferrer` 2.2, which adds the `com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE` permission to the app's merged manifest. It is a normal permission: Android grants it without asking the user.
+- The SDK depends on `com.android.installreferrer:installreferrer` 2.2, which adds the `com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE` permission to the app's merged manifest. It is a normal permission: Android grants it without asking the user ([#19](https://github.com/LinkForty/mobile-sdk-android/pull/19)).
 
 ## [1.7.0] - 2026-10-21
 ### Added

@@ -185,7 +185,7 @@ LinkForty.shared.onDeepLink { uri, data ->
 
 ### onDeferredDeepLink(callback)
 
-Register a callback for deferred deep links — fires on first app launch if the install was attributed to a link click. For an install from Google Play, the SDK sends the Play install referrer with the install; a LinkForty link puts its click id there, so a server on `@linkforty/core` 1.41.0 or later matches the install to that exact click (`attributionMethod` "install_referrer", `competingLinks` 0). Otherwise the install is matched by fingerprint.
+Register a callback for deferred deep links — fires on first app launch if the install was attributed to a link click. For an install from Google Play, the SDK sends the Play install referrer with the install; a LinkForty link puts its click id there, so a server on `@linkforty/core` 1.41.1 or later matches the install to that exact click (`attributionMethod` "install_referrer", `competingLinks` 0). Otherwise the install is matched by fingerprint.
 
 ```kotlin
 LinkForty.shared.onDeferredDeepLink { data ->

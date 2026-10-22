@@ -1,6 +1,7 @@
 package com.linkforty.sdk.attribution
 
 import com.linkforty.sdk.errors.LinkFortyError
+import com.linkforty.sdk.fingerprint.DeviceFingerprint
 import com.linkforty.sdk.models.DeepLinkData
 import com.linkforty.sdk.models.InstallResponse
 import com.linkforty.sdk.models.UTMParameters
@@ -217,5 +218,58 @@ class AttributionManagerTest {
     fun `clearData calls storage clearAll`() {
         sut.clearData()
         assertTrue(mockStorage.clearAllCalled)
+    }
+
+    // -- Play install referrer --
+
+    private val organic = InstallResponse(
+        installId = "id",
+        attributed = false,
+        confidenceScore = 0.0,
+        matchedFactors = emptyList()
+    )
+
+    @Test
+    fun `reportInstall sends the Play install referrer with the fingerprint`() = runTest {
+        mockNetwork.mockResponse = organic
+        sut = AttributionManager(mockNetwork, mockStorage, mockFingerprint) { "lf_click=11111111-2222-4333-8444-555555555555" }
+
+        sut.reportInstall(attributionWindowHours = 168)
+
+        val body = mockNetwork.lastBody as DeviceFingerprint
+        assertEquals("lf_click=11111111-2222-4333-8444-555555555555", body.installReferrer)
+        assertEquals("TestApp/1.0 Android/13", body.userAgent)
+    }
+
+    @Test
+    fun `reportInstall leaves the referrer out when Play has none`() = runTest {
+        mockNetwork.mockResponse = organic
+        sut = AttributionManager(mockNetwork, mockStorage, mockFingerprint) { null }
+
+        sut.reportInstall(attributionWindowHours = 168)
+
+        assertNull((mockNetwork.lastBody as DeviceFingerprint).installReferrer)
+    }
+
+    @Test
+    fun `reportInstall does not read the referrer once the install is reported`() = runTest {
+        mockStorage.mockInstallId = "existing"
+        var reads = 0
+        sut = AttributionManager(mockNetwork, mockStorage, mockFingerprint) { reads++; "lf_click=x" }
+
+        sut.reportInstall(attributionWindowHours = 168)
+
+        assertEquals(0, reads)
+        assertEquals(0, mockNetwork.requestCount)
+    }
+
+    @Test
+    fun `the install request JSON carries installReferrer only when there is one`() {
+        val moshi = com.squareup.moshi.Moshi.Builder().build()
+        val adapter = moshi.adapter(DeviceFingerprint::class.java)
+        val base = mockFingerprint.collectFingerprint(168, null, null)
+
+        assertTrue(adapter.toJson(base.copy(installReferrer = "lf_click=abc")).contains("\"installReferrer\":\"lf_click=abc\""))
+        assertFalse(adapter.toJson(base).contains("installReferrer"))
     }
 }

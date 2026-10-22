@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import com.linkforty.sdk.attribution.AttributionContext
 import com.linkforty.sdk.attribution.AttributionManager
+import com.linkforty.sdk.attribution.PlayInstallReferrerSource
 import com.linkforty.sdk.deeplink.DeepLinkCallback
 import com.linkforty.sdk.deeplink.DeepLinkHandler
 import com.linkforty.sdk.deeplink.DeferredDeepLinkCallback
@@ -169,7 +170,8 @@ class LinkForty private constructor() {
         this.attributionManager = AttributionManager(
             networkManager = networkManager,
             storageManager = storageManager,
-            fingerprintCollector = fingerprintCollector
+            fingerprintCollector = fingerprintCollector,
+            installReferrerSource = PlayInstallReferrerSource(appContext)
         )
 
         this.eventTracker = EventTracker(

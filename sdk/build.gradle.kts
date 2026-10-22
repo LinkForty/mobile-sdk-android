@@ -59,6 +59,8 @@ dependencies {
     ksp(libs.moshi.kotlin.codegen)
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
+    // Google Play Install Referrer: names the click an Android install came from.
+    implementation(libs.installreferrer)
 
     // Optional: enables LinkFortyNavObserver for automatic screen-view tracking.
     // compileOnly so apps that don't use Jetpack Navigation don't pull it in;

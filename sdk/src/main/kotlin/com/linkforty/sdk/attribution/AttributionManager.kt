@@ -14,7 +14,8 @@ import com.linkforty.sdk.storage.StorageManagerProtocol
 internal class AttributionManager(
     private val networkManager: NetworkManagerProtocol,
     private val storageManager: StorageManagerProtocol,
-    private val fingerprintCollector: FingerprintCollectorProtocol
+    private val fingerprintCollector: FingerprintCollectorProtocol,
+    private val installReferrerSource: InstallReferrerSource? = null
 ) {
 
     /**
@@ -47,12 +48,14 @@ internal class AttributionManager(
             )
         }
 
-        // Collect device fingerprint
+        // Collect device fingerprint, with the Play install referrer when there is one
+        val installReferrer = installReferrerSource?.read()
+        LinkFortyLogger.log(if (installReferrer != null) "Play install referrer: $installReferrer" else "No Play install referrer")
         val fingerprint = fingerprintCollector.collectFingerprint(
             attributionWindowHours = attributionWindowHours,
             deviceId = deviceId,
             appToken = appToken
-        )
+        ).copy(installReferrer = installReferrer)
 
         LinkFortyLogger.log("Reporting install with fingerprint: $fingerprint")
 

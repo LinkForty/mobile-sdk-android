@@ -9,7 +9,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 
 ## Features
 
-- **Deferred Deep Linking**: Match app installs to link clicks using privacy-compliant fingerprinting
+- **Deferred Deep Linking**: Match app installs to link clicks: exactly, from the Google Play install referrer, and otherwise by privacy-compliant fingerprinting
 - **App Links**: Full support for Android App Links (verified HTTPS deep links)
 - **Custom URL Schemes**: Handle custom app URL schemes
 - **Event Tracking**: Track in-app events and conversions

@@ -50,5 +50,12 @@ data class DeviceFingerprint(
     val sdkName: String = SdkInfo.NAME,
 
     /** SDK release version (e.g., "1.2.0"), for backend SDK diagnostics */
-    val sdkVersion: String = SdkInfo.VERSION
+    val sdkVersion: String = SdkInfo.VERSION,
+
+    /**
+     * The Google Play install referrer, as Play returns it. A LinkForty link
+     * puts its click id there, so the server matches the install to that
+     * click. Null (and left out of the request) when Play has none.
+     */
+    val installReferrer: String? = null
 )

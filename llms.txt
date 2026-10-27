@@ -14,24 +14,19 @@
 
 ```kotlin
 dependencies {
-    implementation("com.linkforty:sdk:1.1.0")
+    implementation("com.linkforty:sdk:1.8.0")
 }
 ```
 
-### settings.gradle.kts (if using GitHub Packages)
+### settings.gradle.kts
+
+The SDK is published to Maven Central; no other repository is needed.
 
 ```kotlin
 dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://maven.pkg.github.com/linkforty/mobile-sdk-android")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_USER")
-                password = providers.gradleProperty("gpr.key").orNull ?: System.getenv("GITHUB_TOKEN")
-            }
-        }
     }
 }
 ```
@@ -40,7 +35,7 @@ dependencyResolutionManagement {
 
 ```groovy
 dependencies {
-    implementation 'com.linkforty:sdk:1.1.0'
+    implementation 'com.linkforty:sdk:1.8.0'
 }
 ```
 
@@ -50,7 +45,7 @@ dependencies {
 data class LinkFortyConfig(
     val baseURL: String,
     val apiKey: String? = null,        // only needed for createLink()
-    val appToken: String? = null,      // Cloud only — recommended; enables organic-install attribution
+    val appToken: String? = null,      // required on the hosted service; not needed by a self-hosted Core server
     val debug: Boolean = false,
     val attributionWindowHours: Int = 168  // 7 days, range: 1-2160
 )
@@ -144,13 +139,13 @@ import com.linkforty.sdk.models.LinkFortyConfig
 
 ### LinkForty.initialize(context, config): InstallResponse (suspend)
 
-Initialize the SDK, report the install, and return attribution data. Must be called before any other method.
+Initialize the SDK, report the install, and return attribution data. Call it once, from a coroutine, before tracking events or creating links; `onDeferredDeepLink`, `onDeepLink` and `handleDeepLink` can be called before it.
 
 ```kotlin
 val config = LinkFortyConfig(
-    baseURL = "https://go.yourdomain.com",
-    apiKey = "lf_live_abc123",      // optional — only for createLink()
-    appToken = "at_a1b2c3d4...",    // recommended for Cloud — enables organic-install attribution
+    baseURL = "https://api.linkforty.com", // the hosted service; your own server's URL if self-hosted
+    apiKey = "lf_live_abc123",      // optional — only for createLink(); a secret
+    appToken = "at_a1b2c3d4...",    // required on the hosted service
     debug = BuildConfig.DEBUG
 )
 
@@ -304,11 +299,11 @@ Add an intent filter with `android:autoVerify="true"` to your main activity:
 </activity>
 ```
 
-`android:launchMode="singleTask"` is required so `onNewIntent()` fires when the app is already running.
+`android:launchMode="singleTask"` (or `singleTop`) is required so `onNewIntent()` fires when the app is already running. `android:exported="true"` is required for an activity with an intent filter when the app targets API 31 or higher.
 
 ### 2. SHA-256 Fingerprint
 
-Configure your app's signing certificate fingerprint in the LinkForty dashboard (Settings → App Configuration).
+LinkForty serves `/.well-known/assetlinks.json` on its link hosts from your package name and signing certificate fingerprints: on the hosted service, enter them in your app configuration; on self-hosted Core, set `ANDROID_PACKAGE_NAME` and `ANDROID_SHA256_FINGERPRINTS`. For a Google Play build with Play App Signing, use the app signing key SHA-256 from Play Console (App integrity > App signing), not the upload key.
 
 ```bash
 # Debug keystore
@@ -345,8 +340,7 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val config = LinkFortyConfig(
-                baseURL = "https://go.yourdomain.com",
-                apiKey = "lf_live_abc123",
+                baseURL = "https://api.linkforty.com",
                 appToken = "at_a1b2c3d4...",
                 debug = BuildConfig.DEBUG
             )
@@ -426,8 +420,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val config = LinkFortyConfig(
-                baseURL = "https://go.yourdomain.com",
-                apiKey = "lf_live_abc123",
+                baseURL = "https://api.linkforty.com",
                 appToken = "at_a1b2c3d4...",
                 debug = BuildConfig.DEBUG
             )
@@ -487,16 +480,14 @@ class MainActivity : ComponentActivity() {
 adb shell am start -a android.intent.action.VIEW -d "https://go.yourdomain.com/abc123"
 ```
 
-## Self-Hosted vs Cloud
-
-The only change is the `baseURL`:
+## Hosted vs Self-Hosted
 
 ```kotlin
-// Cloud (managed SaaS)
-val config = LinkFortyConfig(baseURL = "https://go.linkforty.com")
+// Hosted service: the API host, plus the workspace's app token (required)
+val config = LinkFortyConfig(baseURL = "https://api.linkforty.com", appToken = "at_a1b2c3d4...")
 
-// Self-hosted (@linkforty/core)
+// Self-hosted (@linkforty/core): your server's URL; no app token needed
 val config = LinkFortyConfig(baseURL = "https://links.yourdomain.com")
 ```
 
-All SDK methods work identically with both.
+Differences: the SDK learns the workspace's link domains (`GET /api/sdk/v1/link-domains`) only with an `appToken`, from a server that provides that endpoint; without them it looks up every web URL. `createLink()` posts to `POST /api/sdk/v1/links`, which the hosted service provides; it falls back to `POST /api/links`, and Core's `/api/links` requires an `originalUrl` that `CreateLinkOptions` doesn't send, so against Core create links from your backend.

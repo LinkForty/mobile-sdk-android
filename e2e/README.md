@@ -19,7 +19,7 @@ the first launch only.
 
 ## Requirements
 
-- A LinkForty server (Core or Cloud) and an API key for it.
+- A LinkForty server (self-hosted Core or the hosted service) and an API key for it.
 - The server must take the client IP from `X-Forwarded-For` (Fastify
   `trustProxy`, or Core's `TRUSTED_CLIENT_IP_HEADER=x-forwarded-for`).
   Attribution ignores loopback and private addresses, so the harness puts a

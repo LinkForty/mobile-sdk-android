@@ -27,7 +27,7 @@ internal class AttributionManager(
      *
      * @param attributionWindowHours Attribution window in hours
      * @param deviceId Optional device ID (GAID) if user consented
-     * @param appToken Optional public workspace token (Cloud organic-install scoping)
+     * @param appToken Optional public workspace token that scopes the install to a workspace
      * @return Install response with attribution data
      * @throws LinkFortyError on failure
      */

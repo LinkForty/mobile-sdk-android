@@ -16,15 +16,16 @@ data class InstallResponse @JvmOverloads constructor(
     /** Confidence score for attribution (0-100) */
     val confidenceScore: Double,
 
-    /** Which fingerprint factors matched */
+    /** Which factors matched: the fingerprint factors, or `["install_referrer"]` */
     val matchedFactors: List<String>,
 
     /** Deep link data if attributed, null if organic */
     val deepLinkData: DeepLinkData? = null,
 
     /**
-     * How the install was attributed: `"fingerprint"` when it was matched to a
-     * click, `"none"` when it is organic. Null when the server does not send it,
+     * How the install was attributed: `"install_referrer"` when the Google Play
+     * install referrer named the click, `"fingerprint"` when it was matched to a
+     * click by device fingerprint, `"none"` when it is organic. Null when the server does not send it,
      * and on launches after the first, which return the attribution stored on
      * the device.
      */

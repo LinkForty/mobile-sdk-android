@@ -39,10 +39,10 @@ data class DeviceFingerprint(
     val attributionWindowHours: Int,
 
     /**
-     * Optional public workspace token (LinkForty Cloud only). Lets the
-     * server scope organic installs to the right workspace. Moshi omits
-     * null values from JSON by default, so legacy/self-hosted servers
-     * see the same wire format they always have.
+     * Optional public workspace token (used by the hosted service). Lets the
+     * server scope the install to the right workspace. Moshi omits null
+     * values from JSON by default, so servers that don't use it see the
+     * same wire format they always have.
      */
     val appToken: String? = null,
 

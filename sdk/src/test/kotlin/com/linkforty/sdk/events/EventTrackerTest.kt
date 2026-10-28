@@ -66,7 +66,7 @@ class EventTrackerTest {
         }
     }
 
-    // -- Last-click attribution + screen views (SIT-237) --
+    // -- Last-click attribution + screen views --
 
     @Test
     fun `trackEvent stamps the active last-click attribution`() = runTest {

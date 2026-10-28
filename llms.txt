@@ -1,6 +1,6 @@
 # com.linkforty:sdk (Android)
 
-> Native Kotlin SDK for LinkForty — an open-source mobile attribution and deep link management platform. Handles App Links, deferred deep linking (install attribution), in-app event tracking with offline queue, revenue tracking, and link creation. Depends on OkHttp, Moshi, Kotlin coroutines and Google's Play Install Referrer library. Works with LinkForty Cloud (linkforty.com) or self-hosted Core instances.
+> Native Kotlin SDK for LinkForty — an open-source mobile attribution and deep link management platform. Handles App Links, deferred deep linking (install attribution), in-app event tracking with offline queue, revenue tracking, and link creation. Depends on OkHttp, Moshi, Kotlin coroutines and Google's Play Install Referrer library. Works with the hosted LinkForty service (linkforty.com) or self-hosted Core instances.
 
 ## Requirements
 

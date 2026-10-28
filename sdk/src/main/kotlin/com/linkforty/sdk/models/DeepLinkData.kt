@@ -55,14 +55,17 @@ data class DeepLinkData @JvmOverloads constructor(
     val confidenceScore: Double? = null,
 
     /**
-     * Which fingerprint factors matched the click. Set on a deferred deep link;
-     * null on a direct open.
+     * Which factors matched the click: the fingerprint factors, or
+     * `["install_referrer"]` for a Play install referrer match. Set on a
+     * deferred deep link; null on a direct open.
      */
     val matchedFactors: List<String>? = null,
 
     /**
-     * How the install was matched to the click (`"fingerprint"`). Set on a
-     * deferred deep link; null on a direct open.
+     * How the install was matched to the click: `"install_referrer"` when the
+     * Google Play install referrer named the click, `"fingerprint"` when it was
+     * matched by device fingerprint. Set on a deferred deep link; null on a
+     * direct open.
      */
     val attributionMethod: String? = null,
 

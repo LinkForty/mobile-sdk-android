@@ -40,8 +40,8 @@ import java.math.BigDecimal
  * Usage:
  * ```kotlin
  * val config = LinkFortyConfig(
- *     baseURL = "https://go.yourdomain.com",
- *     apiKey = "your-api-key"
+ *     baseURL = "https://api.linkforty.com", // or your own server if self-hosted
+ *     appToken = "at_your_app_token"         // required on the hosted service
  * )
  * val response = LinkForty.initialize(context, config)
  * ```

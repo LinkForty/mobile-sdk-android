@@ -6,13 +6,18 @@ import java.net.URI
 /**
  * Configuration for the LinkForty SDK.
  *
- * @property baseURL The base URL of your LinkForty instance (e.g., "https://go.yourdomain.com")
- * @property apiKey Optional API key for LinkForty Cloud authentication
- * @property appToken Optional public workspace token for LinkForty Cloud. Recommended —
- *   required for organic installs (App Store discovery, social mentions, etc.) to be
- *   attributed to your workspace. Find it in the dashboard under Workspace Settings →
- *   App Token. Safe to ship in your app bundle — identifies the workspace only, can't
- *   authenticate API actions. Format: `at_<32 hex chars>`.
+ * @property baseURL The LinkForty server the SDK talks to: `https://api.linkforty.com`
+ *   on the hosted service, or your own server's URL. Must be HTTPS (HTTP is allowed
+ *   for localhost, 127.0.0.1, 0.0.0.0 and 10.0.2.2).
+ * @property apiKey API key, needed only for [com.linkforty.sdk.LinkForty.createLink].
+ *   When set it is sent as a Bearer token on every request. It is a secret: leave it
+ *   out unless the app creates links.
+ * @property appToken Your workspace's public app token. Required on the hosted service:
+ *   it matches installs only to your workspace's links, puts organic installs (Play
+ *   Store discovery, social mentions, etc.) in your workspace, and lets the SDK learn
+ *   your link domains. A self-hosted Core server doesn't need it. Safe to ship in your
+ *   app: it identifies the workspace only and can't authenticate API actions.
+ *   Format: `at_<32 hex chars>`.
  * @property debug Enable debug logging (default: false)
  * @property attributionWindowHours Attribution window in hours (default: 168 = 7 days)
  */

@@ -9,7 +9,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 
 ## Features
 
-- **Deferred Deep Linking**: Match app installs to link clicks: exactly, from the Google Play install referrer, and otherwise by privacy-compliant fingerprinting
+- **Deferred Deep Linking**: Match app installs to link clicks: exactly, from the Google Play install referrer (on a server that supports it), and otherwise from device signals (fingerprinting)
 - **App Links**: Full support for Android App Links (verified HTTPS deep links)
 - **Custom URL Schemes**: Handle custom app URL schemes
 - **Event Tracking**: Track in-app events and conversions
@@ -18,7 +18,7 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 - **Screen-Flow Tracking**: Report screen views (manually or automatically via a Jetpack Navigation listener) to see what users do after clicking a link
 - **Offline Support**: Events are stored on the device until the server has them (max 100), and sent on the next launch, when the app returns to the foreground, or after the next event that sends
 - **Programmatic Link Creation**: Create short links directly from your app
-- **Privacy-First**: No GAID collection by default
+- **Privacy-First**: Never reads the Google Advertising ID (GAID)
 - **Kotlin-Native**: 100% Kotlin, modern coroutines API
 
 ## Requirements
@@ -28,6 +28,17 @@ Native Android SDK for [LinkForty](https://github.com/LinkForty/core) — the op
 - JDK 17
 
 ## Installation
+
+The SDK is published to Maven Central. Make sure `mavenCentral()` is in your repositories (new Android Studio projects have it in `settings.gradle.kts`):
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+```
 
 ### Gradle (Kotlin DSL)
 
@@ -49,11 +60,17 @@ dependencies {
 
 ### 1. Initialize the SDK
 
-In your `Application` class or main `Activity`:
+In your `Application` class (register it with `android:name` on `<application>` in your manifest). `initialize()` is a `suspend` function, so call it from a coroutine:
 
 ```kotlin
+import android.app.Application
+import android.util.Log
 import com.linkforty.sdk.LinkForty
 import com.linkforty.sdk.models.LinkFortyConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class MyApplication : Application() {
     // Any dispatcher works: callbacks registered and links handled before
@@ -66,11 +83,10 @@ class MyApplication : Application() {
         appScope.launch {
             try {
                 val config = LinkFortyConfig(
-                    baseURL = "https://go.yourdomain.com",
-                    apiKey = "your-api-key",         // Optional for self-hosted
-                    appToken = "at_a1b2c3d4...",     // Recommended for Cloud — enables organic-install attribution
+                    baseURL = "https://api.linkforty.com", // the hosted service; your own server's URL if self-hosted
+                    appToken = "at_a1b2c3d4...",           // required on the hosted service
                     debug = true,
-                    attributionWindowHours = 168 // 7 days
+                    attributionWindowHours = 168           // 7 days (the default)
                 )
                 val response = LinkForty.initialize(this@MyApplication, config)
                 Log.d("LinkForty", "Install ID: ${response.installId}")
@@ -81,6 +97,16 @@ class MyApplication : Application() {
     }
 }
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `baseURL` | Yes | The LinkForty server the SDK talks to: `https://api.linkforty.com` on the hosted service, or your own server. Must be HTTPS (HTTP is allowed for `localhost`, `127.0.0.1`, `0.0.0.0` and `10.0.2.2`). |
+| `appToken` | On the hosted service | Your workspace's public app token (`at_…`). It matches installs only to your workspace's links, puts organic installs in your workspace, and lets the SDK learn your link domains. Safe to ship in the app. A self-hosted Core server doesn't need it. |
+| `apiKey` | Only for `createLink()` | An API key. It is a secret: leave it out unless the app creates links. |
+| `debug` | No | Logs SDK activity to Logcat (default `false`). |
+| `attributionWindowHours` | No | 1 to 2160 hours (default 168, 7 days). |
+
+If `initialize()` can't report the install (for example, offline on the first launch), it throws and leaves the SDK uninitialized, keeping registered callbacks, so you can call it again.
 
 ### 2. Handle Deferred Deep Links (Install Attribution)
 
@@ -119,7 +145,10 @@ LinkForty.shared.onDeferredDeepLink { deepLinkData ->
 First, configure App Links in your `AndroidManifest.xml`:
 
 ```xml
-<activity android:name=".MainActivity">
+<activity
+    android:name=".MainActivity"
+    android:exported="true"
+    android:launchMode="singleTask">
     <intent-filter android:autoVerify="true">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
@@ -131,7 +160,7 @@ First, configure App Links in your `AndroidManifest.xml`:
 </activity>
 ```
 
-Then handle incoming intents:
+Use the host your links are served from (add a `<data>` element for each custom domain). `android:exported="true"` is required for an activity with an intent filter when your app targets Android 12 (API 31) or higher. With `singleTask` (or `singleTop`), a link tapped while the app is running is delivered to the existing activity's `onNewIntent()`, so pass the URI from both `onCreate()` and `onNewIntent()`:
 
 ```kotlin
 class MainActivity : AppCompatActivity() {
@@ -142,6 +171,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIntent(intent)
     }
 
@@ -152,7 +182,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-// Register callback
+// Register the callback, before or after initialize()
 LinkForty.shared.onDeepLink { uri, deepLinkData ->
     Log.d("LinkForty", "Deep link opened: $uri")
     deepLinkData?.let { data ->
@@ -166,11 +196,13 @@ LinkForty.shared.onDeepLink { uri, deepLinkData ->
 
 A link handed to `handleDeepLink` before `initialize()` has finished, as when it launches the app, is held and delivered once it has.
 
-Pass every URI that opens the app. `handleDeepLink` returns `true` for a LinkForty link, which it looks up on the server, and `false` for anything else, which it doesn't: a custom-scheme URI, or, once the SDK knows your workspace's link domains (it learns them with an `appToken`), a web URI on another host. `onDeepLink` receives both, the second with the URI's own parameters.
+Pass every URI that opens the app. `handleDeepLink` returns `true` for a LinkForty link, which it looks up on the server, and `false` for anything else, which it doesn't: a custom-scheme URI, or, once the SDK knows your workspace's link domains (it learns them with an `appToken`), a web URI on a host that is neither one of them nor the `baseURL` host. Until it knows them, or without an `appToken`, every web URI is looked up. `onDeepLink` receives both, the second with the URI's own parameters.
 
 > **Server-side resolution:** When the SDK is initialized, LinkForty links are resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. If the server is unreachable, the SDK falls back to local URL parsing, as it does for a URI that isn't a LinkForty link.
 
 ### 4. Track Events
+
+The tracking calls are `suspend` functions: call them from a coroutine, such as `lifecycleScope.launch { ... }`. They throw `LinkFortyError.NotInitialized` until `initialize()` has finished.
 
 ```kotlin
 // Track a simple event
@@ -231,18 +263,19 @@ Log.d("LinkForty", "Share this link: ${result.url}")
 // e.g., "https://go.yourdomain.com/tmpl/abc123"
 ```
 
-> **Note:** Requires an API key in `LinkFortyConfig`. See [API Reference](API.md#createlinkoptions) for all options.
+> **Note:** `createLink` is a `suspend` function and requires an `apiKey` in `LinkFortyConfig` (it throws `LinkFortyError.MissingApiKey` without one). It posts to `POST /api/sdk/v1/links`, which the hosted service provides. On a server without that endpoint it falls back to `POST /api/links`; LinkForty Core's `/api/links` requires an `originalUrl`, which `CreateLinkOptions` doesn't send, so against a self-hosted Core server create links from your backend instead. See [API Reference](API.md#createlinkoptions) for all options.
 
 ## Advanced Usage
 
 ### Self-Hosted LinkForty Core
 
+Point `baseURL` at your Core server. A stock Core server needs no `appToken`, and no `apiKey` unless you use `createLink` (see the note above):
+
 ```kotlin
 val config = LinkFortyConfig(
-    baseURL = "https://links.yourcompany.com",
-    apiKey = null // No API key needed for self-hosted
+    baseURL = "https://links.yourcompany.com"
 )
-LinkForty.initialize(context, config)
+LinkForty.initialize(context, config) // from a coroutine
 ```
 
 ### Custom Attribution Window
@@ -293,12 +326,18 @@ LinkForty.shared.reset()
 
 ## App Links Setup
 
-### 1. Create Digital Asset Links File
+### 1. Digital Asset Links File
 
-Your backend must serve a Digital Asset Links file at:
+Android verifies App Links against a Digital Asset Links file on each link host:
 `https://go.yourdomain.com/.well-known/assetlinks.json`
 
-Example:
+LinkForty serves this file for you: on the hosted service, once your Android package name and SHA-256 certificate fingerprints are entered in your app configuration; on LinkForty Core, from the `ANDROID_PACKAGE_NAME` and `ANDROID_SHA256_FINGERPRINTS` (comma-separated) environment variables. Until they are set, the file returns a 404 and the links open in the browser.
+
+Which fingerprints to list:
+- **Google Play builds:** if Play App Signing is on (the default for new apps), Google re-signs your app, so use the **app signing key** SHA-256 from Play Console (App integrity > App signing), not your upload key.
+- **Local and sideloaded builds:** the certificate you sign them with, for example the debug keystore: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`.
+
+The file it serves looks like this:
 ```json
 [{
   "relation": ["delegate_permission/common.handle_all_urls"],
@@ -317,7 +356,14 @@ Add an intent filter to your main activity (see Quick Start section).
 ### 3. Test App Links
 
 ```bash
-# Verify Digital Asset Links
+# Check that the file is served
+curl https://go.yourdomain.com/.well-known/assetlinks.json
+
+# Android 12+: re-run verification and show the result for each host ("verified")
+adb shell pm verify-app-links --re-verify com.yourcompany.yourapp
+adb shell pm get-app-links com.yourcompany.yourapp
+
+# Open a link in the app
 adb shell am start -a android.intent.action.VIEW \
   -d "https://go.yourdomain.com/abc123" \
   com.yourcompany.yourapp
@@ -327,23 +373,24 @@ adb shell am start -a android.intent.action.VIEW \
 
 ### Privacy-First Design
 
-- **No GAID**: Does not collect Google Advertising ID by default
-- **No Persistent IDs**: Uses probabilistic fingerprinting only
-- **Data Minimization**: Collects only necessary attribution data
-- **User Control**: Provides `clearData()` for user data deletion
+- **No advertising ID**: The SDK never reads the Google Advertising ID (GAID). `initialize()` takes an optional `deviceId`, sent only if your app passes one.
+- **How installs are matched**: For an install from Google Play, by the Play install referrer, which names the link click exactly; otherwise from device signals (fingerprinting), which is probabilistic.
+- **Install ID**: The server assigns an install ID on the first launch. The SDK stores it on the device (in `SharedPreferences`, with the install's attribution, the last deep link that opened the app, and any queued events) and sends it with every event, until `clearData()` or the app is uninstalled.
+- **User Control**: `clearData()` deletes the install ID, the install's attribution, the last deep link and queued events from the device; the next launch reports a new install.
 
-### Data Collected (for attribution only)
+### Data Sent
 
-- Device timezone
-- Device language
-- Screen resolution (pixels)
-- Android version
-- App version
-- User-Agent string
+- **Install report (first launch):** time zone, language, screen resolution (pixels), platform and Android version, app version, a User-Agent built from the app name, app version and Android version, the Play install referrer (Google Play installs), the `appToken` if set, the attribution window, the SDK name and version, and `deviceId` if your app passes one. The server also sees the request's IP address, which fingerprint matching uses.
+- **Deep link lookup:** the link's path, time zone, language, screen resolution, platform and Android version.
+- **Events:** the install ID, event name and properties, a timestamp, the link (and click) the event is credited to, a session ID, an event ID used to store a retried event once, and the SDK name and version.
+
+### Permissions
+
+The SDK's manifest adds `android.permission.INTERNET`, and the Play Install Referrer library it depends on adds `com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE`. Both are normal permissions: Android grants them without asking the user.
 
 ### HTTPS Required
 
-The SDK enforces HTTPS for all API endpoints (except localhost, 127.0.0.1, and 10.0.2.2 for development).
+The SDK enforces HTTPS for all API endpoints (except `localhost`, `127.0.0.1`, `0.0.0.0` and `10.0.2.2`, for development).
 
 ## Testing
 
@@ -400,6 +447,7 @@ LinkForty Android SDK is available under the MIT license. See [LICENSE](LICENSE)
 | React Native | [`@linkforty/mobile-sdk-react-native`](https://github.com/LinkForty/mobile-sdk-react-native) |
 | Expo | [`@linkforty/mobile-sdk-expo`](https://github.com/LinkForty/mobile-sdk-expo) |
 | iOS (Swift) | [LinkFortySDK](https://github.com/LinkForty/mobile-sdk-ios) |
+| Flutter | [`linkforty_flutter`](https://github.com/LinkForty/mobile-sdk-flutter) |
 
 ## Related Projects
 

@@ -57,9 +57,8 @@ suspend fun initialize(
 **Example:**
 ```kotlin
 val config = LinkFortyConfig(
-    baseURL = "https://go.yourdomain.com",
-    apiKey = "your-api-key",
-    appToken = "at_a1b2c3d4..."   // recommended for Cloud — enables organic-install attribution
+    baseURL = "https://api.linkforty.com", // the hosted service; your own server's URL if self-hosted
+    appToken = "at_a1b2c3d4..."            // required on the hosted service
 )
 val response = LinkForty.initialize(context, config)
 Log.d("LinkForty", "Install ID: ${response.installId}")
@@ -356,9 +355,9 @@ data class LinkFortyConfig(
 ```
 
 **Parameters:**
-- `baseURL`: Backend URL (must be HTTPS except localhost/127.0.0.1/10.0.2.2)
-- `apiKey`: API key (optional for self-hosted)
-- `appToken`: Public workspace token (LinkForty Cloud only). Recommended — required for organic installs (App Store discovery, social mentions, etc.) to be attributed to your workspace. It is sent with every request as `X-LinkForty-App-Token`, so the server answers with your workspace's links only, and lets the SDK learn your link domains (see `handleDeepLink`). Find it in the dashboard under Workspace Settings → App Token. Format: `at_<32 hex chars>`. Safe to ship in your app bundle.
+- `baseURL`: The LinkForty server: `https://api.linkforty.com` on the hosted service, or your own server (must be HTTPS except localhost/127.0.0.1/0.0.0.0/10.0.2.2)
+- `apiKey`: API key, needed only for `createLink()`. It is a secret: leave it out unless the app creates links
+- `appToken`: Public workspace token. Required on the hosted service: it limits install matching to your workspace's links and puts organic installs in your workspace; a self-hosted Core server doesn't need it. It is sent with every request as `X-LinkForty-App-Token`, so the server answers with your workspace's links only, and lets the SDK learn your link domains (see `handleDeepLink`). Find it in the dashboard under Workspace Settings → App Token. Format: `at_<32 hex chars>`. Safe to ship in your app bundle.
 - `debug`: Enable debug logging (default: false)
 - `attributionWindowHours`: Attribution window in hours (default: 168 = 7 days, max: 2160 = 90 days)
 
@@ -393,7 +392,7 @@ val clickedAt: String?            // ISO 8601 click timestamp
 val linkId: String?               // Link UUID from the backend
 val confidenceScore: Double?      // Match confidence (0-100); deferred deep links only
 val matchedFactors: List<String>? // Matched fingerprint factors; deferred deep links only
-val attributionMethod: String?    // "fingerprint"; deferred deep links only
+val attributionMethod: String?    // "install_referrer" or "fingerprint"; deferred deep links only
 val competingLinks: Int?          // Other links in contention for the install; deferred deep links only
 ```
 
@@ -423,7 +422,7 @@ val attributed: Boolean           // Whether install was attributed
 val confidenceScore: Double       // Confidence score (0-100)
 val matchedFactors: List<String>  // Matched fingerprint factors
 val deepLinkData: DeepLinkData?   // Deep link data if attributed
-val attributionMethod: String?    // "fingerprint" when matched to a click, "none" when organic
+val attributionMethod: String?    // "install_referrer" (Play install referrer) or "fingerprint" when matched to a click, "none" when organic
 val competingLinks: Int?          // Other links in contention for the install
 ```
 

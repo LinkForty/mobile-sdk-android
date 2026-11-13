@@ -191,8 +191,10 @@ suspend fun trackEvent(
 
 **Example:**
 ```kotlin
-LinkForty.shared.trackEvent("purchase", mapOf("product_id" to "123", "amount" to 29.99))
+LinkForty.shared.trackEvent("purchase", mapOf("product_id" to "123", "revenue" to 29.99, "currency" to "USD"))
 ```
+
+To count an event as revenue, put the amount in a `revenue` property, with an ISO 4217 `currency` code. Revenue reports read only `revenue`: an amount under any other name, such as `amount` or `price`, is stored with the event but not counted.
 
 ---
 

@@ -44,7 +44,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.linkforty:sdk:1.8.0")
+    implementation("com.linkforty:sdk:1.9.0")
 }
 ```
 
@@ -52,7 +52,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.linkforty:sdk:1.8.0'
+    implementation 'com.linkforty:sdk:1.9.0'
 }
 ```
 

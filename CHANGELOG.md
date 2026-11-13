@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-12
+### Added
+- When a LinkForty App Link opens the app, the resolve request carries the link's own query parameters along with the fingerprint, so the click is recorded with the same parameters a browser click of the link would carry: its UTM tags, and any other parameter the server reads. The SDK's own `fp_` values replace any `fp_` parameter on the link, and empty parameters are left out. A server that ignores extra parameters behaves as before ([#24](https://github.com/LinkForty/mobile-sdk-android/pull/24)).
+
+### Fixed
+- The README and API.md `trackEvent` purchase examples put the amount in `revenue`, the property revenue reports read ([#23](https://github.com/LinkForty/mobile-sdk-android/pull/23)).
+
 ## [1.8.0] - 2026-10-22
 ### Added
 - For an install from Google Play, the SDK reads the Play install referrer (Play Install Referrer API) on the launch that reports the install and sends it as `installReferrer`. A LinkForty link puts its click id in the referrer of the Play listing it sends a visitor to, so a server on `@linkforty/core` 1.41.1 or later matches the install to that exact click: `attributionMethod` is `"install_referrer"`, `confidenceScore` 100 and `competingLinks` 0. The SDK waits at most 2 seconds for Play; without a referrer (another store, a sideload, no answer) the install is matched by fingerprint as before ([#19](https://github.com/LinkForty/mobile-sdk-android/pull/19)).

@@ -68,6 +68,83 @@ class DeepLinkServerResolutionTest {
         return uri
     }
 
+    // -- Resolve request query --
+
+    /** Handles a link with [queryParams] and returns the resolve endpoint requested. */
+    private fun resolveEndpointFor(
+        queryParams: Map<String, String?>,
+        pathSegments: List<String> = listOf("abc123")
+    ): String {
+        val latch = CountDownLatch(1)
+        mockNetwork.mockResponse = DeepLinkData(shortCode = "abc123", linkId = "link-uuid-1")
+        sut.onDeepLink { _, _ -> latch.countDown() }
+        sut.handleDeepLink(mockUri(pathSegments = pathSegments, queryParams = queryParams))
+        assertTrue(latch.await(2, TimeUnit.SECONDS), "Callback should be invoked")
+        return mockNetwork.lastEndpoint ?: ""
+    }
+
+    /** The decoded query of an endpoint, as a server would read it. */
+    private fun queryOf(endpoint: String): Map<String, String> =
+        endpoint.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate { pair ->
+            val key = java.net.URLDecoder.decode(pair.substringBefore('='), "UTF-8")
+            val value = java.net.URLDecoder.decode(pair.substringAfter('=', ""), "UTF-8")
+            key to value
+        }
+
+    @Test
+    fun `resolve passes the link's query parameters with the fingerprint`() {
+        val endpoint = resolveEndpointFor(mapOf("os_id" to "u1", "utm_campaign" to "winback"))
+
+        assertTrue(endpoint.startsWith("/api/sdk/v1/resolve/abc123?"), endpoint)
+        assertEquals(
+            mapOf(
+                "os_id" to "u1",
+                "utm_campaign" to "winback",
+                "fp_tz" to "America/New_York",
+                "fp_lang" to "en-US",
+                "fp_sw" to "1080",
+                "fp_sh" to "2400",
+                "fp_platform" to "Android",
+                "fp_pv" to "13"
+            ),
+            queryOf(endpoint)
+        )
+    }
+
+    @Test
+    fun `resolve keeps its own fingerprint over fp_ parameters on the link`() {
+        val query = queryOf(resolveEndpointFor(mapOf("fp_tz" to "evil", "FP_LANG" to "evil", "os_id" to "u1")))
+
+        assertEquals("America/New_York", query["fp_tz"])
+        assertEquals("en-US", query["fp_lang"])
+        assertNull(query["FP_LANG"])
+        assertEquals("u1", query["os_id"])
+    }
+
+    @Test
+    fun `resolve encodes values once`() {
+        val query = queryOf(resolveEndpointFor(mapOf("note" to "a b&c", "email" to "a+b@example.com")))
+
+        assertEquals("a b&c", query["note"])
+        assertEquals("a+b@example.com", query["email"])
+    }
+
+    @Test
+    fun `resolve skips empty link parameters`() {
+        val query = queryOf(resolveEndpointFor(mapOf("os_id" to "", "flag" to null, "ct_id" to "c1")))
+
+        assertNull(query["os_id"])
+        assertNull(query["flag"])
+        assertEquals("c1", query["ct_id"])
+    }
+
+    @Test
+    fun `resolve sends only the fingerprint for a link with no query`() {
+        val query = queryOf(resolveEndpointFor(emptyMap()))
+
+        assertEquals(listOf("fp_lang", "fp_platform", "fp_pv", "fp_sh", "fp_sw", "fp_tz"), query.keys.sorted())
+    }
+
     // -- Server-Side Resolution Tests --
 
     @Test

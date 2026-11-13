@@ -225,16 +225,24 @@ internal class DeepLinkHandler {
             deviceId = null
         )
 
+        // The link's own query parameters go along, as they would on a browser
+        // click of the same link. Fingerprint parameters are the SDK's to set.
+        val linkParams = (uri.queryParameterNames ?: emptySet())
+            .filterNot { it.lowercase().startsWith("fp_") }
+            .mapNotNull { name ->
+                uri.getQueryParameter(name)?.takeIf { it.isNotEmpty() }?.let { name to it }
+            }
+
         // Build query string
-        val queryString = listOf(
+        val queryString = (linkParams + listOf(
             "fp_tz" to fingerprint.timezone,
             "fp_lang" to fingerprint.language,
             "fp_sw" to fingerprint.screenWidth.toString(),
             "fp_sh" to fingerprint.screenHeight.toString(),
             "fp_platform" to fingerprint.platform,
             "fp_pv" to fingerprint.platformVersion
-        ).joinToString("&") { (k, v) ->
-            "$k=${URLEncoder.encode(v, Charsets.UTF_8.name())}"
+        )).joinToString("&") { (k, v) ->
+            "${URLEncoder.encode(k, Charsets.UTF_8.name())}=${URLEncoder.encode(v, Charsets.UTF_8.name())}"
         }
 
         val endpoint = "$resolvePath?$queryString"

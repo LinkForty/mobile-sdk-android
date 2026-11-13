@@ -198,7 +198,7 @@ A link handed to `handleDeepLink` before `initialize()` has finished, as when it
 
 Pass every URI that opens the app. `handleDeepLink` returns `true` for a LinkForty link, which it looks up on the server, and `false` for anything else, which it doesn't: a custom-scheme URI, or, once the SDK knows your workspace's link domains (it learns them with an `appToken`), a web URI on a host that is neither one of them nor the `baseURL` host. Until it knows them, or without an `appToken`, every web URI is looked up. `onDeepLink` receives both, the second with the URI's own parameters.
 
-> **Server-side resolution:** When the SDK is initialized, LinkForty links are resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. If the server is unreachable, the SDK falls back to local URL parsing, as it does for a URI that isn't a LinkForty link.
+> **Server-side resolution:** When the SDK is initialized, LinkForty links are resolved via the server to provide enriched data including `deepLinkPath`, `appScheme`, and `linkId`. The link's query parameters go along with the request, so the click is recorded with the same parameters a browser click of the link would carry. If the server is unreachable, the SDK falls back to local URL parsing, as it does for a URI that isn't a LinkForty link.
 
 ### 4. Track Events
 
@@ -381,7 +381,7 @@ adb shell am start -a android.intent.action.VIEW \
 ### Data Sent
 
 - **Install report (first launch):** time zone, language, screen resolution (pixels), platform and Android version, app version, a User-Agent built from the app name, app version and Android version, the Play install referrer (Google Play installs), the `appToken` if set, the attribution window, the SDK name and version, and `deviceId` if your app passes one. The server also sees the request's IP address, which fingerprint matching uses.
-- **Deep link lookup:** the link's path, time zone, language, screen resolution, platform and Android version.
+- **Deep link lookup:** the link's path and query parameters, time zone, language, screen resolution, platform and Android version.
 - **Events:** the install ID, event name and properties, a timestamp, the link (and click) the event is credited to, a session ID, an event ID used to store a retried event once, and the SDK name and version.
 
 ### Permissions
